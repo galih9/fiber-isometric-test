@@ -4,7 +4,7 @@ import {
   useGLTF,
   Environment,
   Sky,
-  Loader, // Add Loader to imports
+  useProgress,
 } from "@react-three/drei";
 import { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import * as THREE from "three";
@@ -204,7 +204,7 @@ function Ground() {
       <CuboidCollider args={[50, 50, 1]} position={[0, 0, -1]} />
       <mesh receiveShadow>
         <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#333" />
+        <meshStandardMaterial color="#555" />
       </mesh>
     </RigidBody>
   );
@@ -221,7 +221,7 @@ function Wall({
     <RigidBody type="fixed" position={position} colliders="cuboid">
       <mesh castShadow receiveShadow>
         <boxGeometry args={args} />
-        <meshStandardMaterial color="#555" />
+        <meshStandardMaterial color="#777" />
       </mesh>
     </RigidBody>
   );
@@ -251,14 +251,51 @@ export function Welcome() {
   const wallHeight = 4;
   const wallThickness = 2;
   const halfSize = mapSize / 2;
-  // Wall positions
-  // Top (Z = -50)
-  // Bottom (Z = 50)
-  // Left (X = -50)
-  // Right (X = 50)
+
+  // Custom Loader Logic
+  const { active, progress } = useProgress();
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+  const [showGame, setShowGame] = useState(false);
+
+  useEffect(() => {
+    // Force wait for 5 seconds
+    const timer = setTimeout(() => {
+      setMinTimeElapsed(true);
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // If 5s passed AND no loading (assets done), show game
+    if (minTimeElapsed && !active) {
+      setShowGame(true);
+    }
+  }, [minTimeElapsed, active]);
 
   return (
-    <div className="h-screen w-screen bg-gray-900">
+    <div className="h-screen w-screen bg-slate-900 relative">
+      {/* Custom Forced Loader */}
+      {!showGame && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black text-white">
+          <div className="text-4xl font-bold mb-4 animate-pulse">
+            LOADING GAME...
+          </div>
+          <div className="w-64 h-4 bg-gray-800 rounded-full overflow-hidden">
+            {/* Show progress bar if assets are loading, otherwise simple infinite pulse */}
+            <div
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="mt-2 text-sm text-gray-400">
+            {active
+              ? `Loading Assets: ${progress.toFixed(0)}%`
+              : "Preparing Environment..."}
+          </p>
+        </div>
+      )}
+
       <Canvas shadows>
         <OrthographicCamera
           makeDefault
@@ -268,10 +305,11 @@ export function Welcome() {
           far={300}
         />
 
-        <ambientLight intensity={0.5} />
+        {/* Improved Lighting */}
+        <ambientLight intensity={2.0} />
         <directionalLight
           position={[10, 20, 5]}
-          intensity={1}
+          intensity={3.0}
           castShadow
           // Reduced shadow map size for performance
           shadow-mapSize={[1024, 1024]}
@@ -320,22 +358,10 @@ export function Welcome() {
           </Physics>
         </Suspense>
       </Canvas>
-      <Loader
-        containerStyles={{
-          backgroundColor: "#111",
-          zIndex: 1000,
-        }}
-        innerStyles={{
-          backgroundColor: "#333",
-          width: "200px",
-        }}
-        barStyles={{
-          backgroundColor: "#fff",
-        }}
-        dataInterpolation={(p) => `Loading ${p.toFixed(0)}%`}
-      />
 
-      <div className="absolute top-4 left-4 text-white font-mono pointer-events-none select-none z-10">
+      <div
+        className={`absolute top-4 left-4 text-white font-mono pointer-events-none select-none z-10 transition-opacity duration-1000 ${showGame ? "opacity-100" : "opacity-0"}`}
+      >
         <h1 className="text-xl font-bold">Racer Physics</h1>
         <p>WASD / Arrows to Drive</p>
         <p>Push the bricks!</p>
