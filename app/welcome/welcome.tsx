@@ -4,6 +4,7 @@ import {
   useGLTF,
   Environment,
   Sky,
+  Loader, // Add Loader to imports
 } from "@react-three/drei";
 import { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import * as THREE from "three";
@@ -47,20 +48,23 @@ function Car() {
   }, []);
 
   const { camera } = useThree();
-  const carPosition = new THREE.Vector3();
+  const carPosition = useRef(new THREE.Vector3());
+  // Camera offset relative to the car (behind and above)
   const offset = new THREE.Vector3(20, 20, 20);
 
+  // Use a lower priority to run after physics?
+  // R3F default is 0. Physics is usually done in its own step.
+  // We'll just trust delta.
   useFrame((state, delta) => {
     if (!rigidBodyRef.current) return;
 
-    // TANK CONTROLS
-    const forward = keys.ArrowUp || keys.w;
-    const backward = keys.ArrowDown || keys.s;
-    const left = keys.ArrowLeft || keys.a;
-    const right = keys.ArrowRight || keys.d;
+    const forwardInput = keys.ArrowUp || keys.w;
+    const backwardInput = keys.ArrowDown || keys.s;
+    const leftInput = keys.ArrowLeft || keys.a;
+    const rightInput = keys.ArrowRight || keys.d;
 
-    // Get current rotation
-    const rotation = rigidBodyRef.current.rotation();
+    const rigidBody = rigidBodyRef.current;
+    const rotation = rigidBody.rotation();
     const quaternion = new THREE.Quaternion(
       rotation.x,
       rotation.y,
@@ -68,57 +72,108 @@ function Car() {
       rotation.w,
     );
 
-    // Calculate forward direction (assuming -Z is forward for the model)
+    // Car Direction Vectors
+    // Assumes the GLTF model faces +Z or -Z.
+    // Usually models face +Z or -Z. Let's assume -Z is "forward" for the car mesh.
     const forwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(quaternion);
+    const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
+    const upDir = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);
 
-    // Movement force (Impulse)
-    const speed = 0.5; // Impulse strength
-    const impulse = new THREE.Vector3();
+    // Get current velocities (world space)
+    const linVel = rigidBody.linvel();
+    const vel = new THREE.Vector3(linVel.x, linVel.y, linVel.z);
 
-    // REVERSED CONTROLS FIX:
-    // If "forward" (W) was moving it wrong, forwardDir might be pointing opposite to desired.
-    // Standard GLB often faces +Z. Our code assumed -Z.
-    // If user said it was reversed, we flip the signs.
+    // Lateral Friction (Tire Grip)
+    // Project velocity onto the right vector to get sliding speed
+    const lateralVel = vel.dot(rightDir);
+    // Apply impulse opposite to lateral velocity to kill slide
+    // 0.8 is the friction coefficient (1.0 = perfect grip, 0.0 = ice)
+    const frictionImpulse = () => {
+      const lateralFriction = 0.8;
+      const changeVelocity = -lateralVel * lateralFriction;
+      // Apply as impulse (mass * change_in_velocity)
+      return rightDir.clone().multiplyScalar(changeVelocity * rigidBody.mass());
+    };
 
-    if (forward) {
-      impulse.addScaledVector(forwardDir, -speed); // Flipped
+    rigidBody.applyImpulse(frictionImpulse(), true);
+
+    // Drive Force
+    const driveSpeed = 1.0; // Acceleration force
+    if (forwardInput) {
+      rigidBody.applyImpulse(
+        forwardDir
+          .clone()
+          .multiplyScalar(-driveSpeed * rigidBody.mass() * delta * 60),
+        true,
+      );
     }
-    if (backward) {
-      impulse.addScaledVector(forwardDir, speed); // Flipped
+    if (backwardInput) {
+      rigidBody.applyImpulse(
+        forwardDir
+          .clone()
+          .multiplyScalar(driveSpeed * rigidBody.mass() * delta * 60),
+        true,
+      );
     }
 
-    // Apply impulse (wake up body if sleeping)
-    if (impulse.lengthSq() > 0) {
-      rigidBodyRef.current.applyImpulse(impulse, true);
+    // Steering
+    // We only steer if the car is moving to simulate realistic car steering
+    // (though for games, sometimes turning in place is nicer, but "weird" was the complaint)
+    const forwardSpeed = vel.dot(forwardDir);
+
+    // Limit max speed
+    const maxSpeed = 20.0;
+    if (vel.length() > maxSpeed) {
+      const clampedVel = vel.normalize().multiplyScalar(maxSpeed);
+      rigidBody.setLinvel(clampedVel, true);
     }
 
-    // Rotation torque
-    const turnSpeed = 0.05; // Greatly Reduced sensitivity
-    const torque = new THREE.Vector3();
-    if (left) {
-      torque.y += turnSpeed;
-    }
-    if (right) {
-      torque.y -= turnSpeed;
+    // Allow turning if moving, or if trying to turn while stopped (optional, lets allow pivot for arcade feel but slower)
+    // Absolute speed for determining turn capability
+    const absSpeed = Math.abs(forwardSpeed);
+
+    if (absSpeed > 1.0 || leftInput || rightInput) {
+      const turnSpeed = 3.5 * delta;
+      const torque = new THREE.Vector3(0, 0, 0);
+
+      // Reverse steering when going backward feels more natural for some,
+      // but standard games usually keep left=left relative to car.
+      // Let's keep strict Left/Right relative to car.
+
+      if (leftInput) {
+        torque.y += turnSpeed;
+      }
+      if (rightInput) {
+        torque.y -= turnSpeed;
+      }
+
+      rigidBody.applyTorqueImpulse(
+        torque.multiplyScalar(rigidBody.mass()),
+        true,
+      );
     }
 
-    if (torque.lengthSq() > 0) {
-      rigidBodyRef.current.applyTorqueImpulse(torque, true);
-    }
+    // Stabilize (keep car upright)
+    // This is often needed if physics goes crazy, but with Cuboid it should be okay.
 
-    // Camera Follow
-    const pos = rigidBodyRef.current.translation();
-    carPosition.set(pos.x, pos.y, pos.z);
+    // Camera Follow Logic (Stutter Fix)
+    const pos = rigidBody.translation();
 
-    camera.lookAt(carPosition);
-    camera.position.lerp(
-      new THREE.Vector3(
-        carPosition.x + offset.x,
-        carPosition.y + offset.y,
-        carPosition.z + offset.z,
-      ),
-      0.1, // Smooth factor
+    // Smoothly interpolate the car position tracking to avoid jitter from physics updates
+    // "damp" the tracking vector
+    const smoothing = 1 - Math.pow(0.001, delta); // Strong equivalent to lerp factor but frame-independent
+
+    carPosition.current.lerp(new THREE.Vector3(pos.x, pos.y, pos.z), smoothing);
+
+    const targetCameraPos = new THREE.Vector3(
+      carPosition.current.x + offset.x,
+      carPosition.current.y + offset.y,
+      carPosition.current.z + offset.z,
     );
+
+    // Smooth camera movement
+    camera.position.lerp(targetCameraPos, 0.1); // Keep it simple but smooth
+    camera.lookAt(carPosition.current);
   });
 
   return (
@@ -126,9 +181,9 @@ function Car() {
       ref={rigidBodyRef}
       position={[0, 2, 0]}
       colliders="cuboid"
-      mass={50}
-      linearDamping={2.0}
-      angularDamping={2.0} // High damping helps control
+      mass={150} // Heavier car feel
+      linearDamping={0.5} // Less air resistance, let friction handle it
+      angularDamping={5.0} // High angular damping prevents spinning out of control
       friction={0.5}
     >
       <primitive object={scene} scale={0.5} />
@@ -265,6 +320,20 @@ export function Welcome() {
           </Physics>
         </Suspense>
       </Canvas>
+      <Loader
+        containerStyles={{
+          backgroundColor: "#111",
+          zIndex: 1000,
+        }}
+        innerStyles={{
+          backgroundColor: "#333",
+          width: "200px",
+        }}
+        barStyles={{
+          backgroundColor: "#fff",
+        }}
+        dataInterpolation={(p) => `Loading ${p.toFixed(0)}%`}
+      />
 
       <div className="absolute top-4 left-4 text-white font-mono pointer-events-none select-none z-10">
         <h1 className="text-xl font-bold">Racer Physics</h1>
