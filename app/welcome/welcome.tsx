@@ -14,9 +14,15 @@ import {
   RapierRigidBody,
   CuboidCollider,
 } from "@react-three/rapier";
+import type { DustSystemHandle } from "./DustSystem";
+import { DustSystem } from "./DustSystem";
 
 // Car component with physics and tank controls
-function Car() {
+function Car({
+  dustRef,
+}: {
+  dustRef: React.RefObject<DustSystemHandle | null>;
+}) {
   const { scene } = useGLTF("/assets/cars/race.glb");
   const rigidBodyRef = useRef<RapierRigidBody>(null);
 
@@ -156,8 +162,43 @@ function Car() {
     // Stabilize (keep car upright)
     // This is often needed if physics goes crazy, but with Cuboid it should be okay.
 
-    // Camera Follow Logic (Stutter Fix)
     const pos = rigidBody.translation();
+    const vecPos = new THREE.Vector3(pos.x, pos.y, pos.z);
+
+    // Dust Emission
+    if (absSpeed > 5.0 && Math.random() < 0.2) {
+      // Emit from rear wheels
+      // Assuming car faces -Z, rear is +Z.
+      // Width is X.
+      const rearOffset = 1.2;
+      const widthOffset = 0.6;
+      const yOffset = -0.5; // low to ground
+
+      // User reported dust in front.
+      // logic: car moves in -forwardDir direction (see drive logic).
+      // so forwardDir points 'backwards' relative to movement.
+      // To place dust behind, we move along forwardDir (positive).
+      const rearCenter = vecPos
+        .clone()
+        .add(forwardDir.clone().multiplyScalar(rearOffset));
+
+      // Left Wheel
+      const leftWheel = rearCenter
+        .clone()
+        .add(rightDir.clone().multiplyScalar(-widthOffset));
+      leftWheel.y += yOffset;
+
+      // Right Wheel
+      const rightWheel = rearCenter
+        .clone()
+        .add(rightDir.clone().multiplyScalar(widthOffset));
+      rightWheel.y += yOffset;
+
+      dustRef.current?.emit(leftWheel);
+      dustRef.current?.emit(rightWheel);
+    }
+
+    // Camera Follow Logic (Stutter Fix)
 
     // Smoothly interpolate the car position tracking to avoid jitter from physics updates
     // "damp" the tracking vector
@@ -252,6 +293,8 @@ export function Welcome() {
   const wallThickness = 2;
   const halfSize = mapSize / 2;
 
+  const dustRef = useRef<DustSystemHandle>(null);
+
   // Custom Loader Logic
   const { active, progress } = useProgress();
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
@@ -325,7 +368,8 @@ export function Welcome() {
 
         <Suspense fallback={null}>
           <Physics gravity={[0, -20, 0]}>
-            <Car />
+            <Car dustRef={dustRef} />
+            <DustSystem ref={dustRef} />
             <Ground />
 
             {/* Boundaries */}
