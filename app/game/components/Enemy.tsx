@@ -1,8 +1,8 @@
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import * as THREE from "three";
-import { RigidBody, RapierRigidBody } from "@react-three/rapier";
+import { RigidBody, RapierRigidBody, useRapier } from "@react-three/rapier";
 import type { DustSystemHandle } from "../DustSystem";
 import { GAME_CONFIG } from "../constants/gameConfig";
 
@@ -22,8 +22,22 @@ export function EnemyUnit({
   onPositionUpdate,
 }: EnemyUnitProps) {
   const { scene } = useGLTF("/assets/cars/van.glb");
+  const { rapier, world } = useRapier();
   const rigidBodyRef = useRef<RapierRigidBody>(null);
   const sceneCloneRef = useRef<THREE.Object3D | null>(null);
+
+  enum AIState {
+    CHASING,
+    AVOIDING_WALL,
+  }
+
+  const aiState = useRef(AIState.CHASING);
+  const avoidanceTorque = useRef(0);
+  const avoidanceState = useRef({
+    active: false,
+    startTime: 0,
+    duration: GAME_CONFIG.enemyAvoidanceDuration,
+  });
 
   // Clone the scene for this enemy instance
   useEffect(() => {
@@ -57,11 +71,115 @@ export function EnemyUnit({
     // Update position for parent
     onPositionUpdate(enemyPos);
 
-    // Calculate direction to player
-    const toPlayer = playerPositionRef.current.clone().sub(enemyPos);
-    toPlayer.y = 0; // Keep on horizontal plane
-    const distanceToPlayer = toPlayer.length();
-    toPlayer.normalize();
+    // --- Wall Detection and State Switching ---
+    const forwardRay = new rapier.Ray(enemyPos, forwardDir);
+    const forwardHit = world.castRay(
+      forwardRay,
+      GAME_CONFIG.enemyRaycastDistance,
+      true,
+      undefined,
+      undefined,
+      rigidBody.collider(0),
+    );
+
+    const leftRayDir = new THREE.Vector3()
+      .copy(forwardDir)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 4);
+    const rightRayDir = new THREE.Vector3()
+      .copy(forwardDir)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 4);
+
+    const leftRay = new rapier.Ray(enemyPos, leftRayDir);
+    const rightRay = new rapier.Ray(enemyPos, rightRayDir);
+
+    const leftHit = world.castRay(
+      leftRay,
+      GAME_CONFIG.enemyRaycastDistance,
+      true,
+      undefined,
+      undefined,
+      rigidBody.collider(0),
+    );
+    const rightHit = world.castRay(
+      rightRay,
+      GAME_CONFIG.enemyRaycastDistance,
+      true,
+      undefined,
+      undefined,
+      rigidBody.collider(0),
+    );
+
+    if (forwardHit && aiState.current === AIState.CHASING) {
+      aiState.current = AIState.AVOIDING_WALL;
+      avoidanceState.current.active = true;
+      avoidanceState.current.startTime = state.clock.getElapsedTime();
+
+      const leftDist = leftHit ? leftHit.toi : Infinity;
+      const rightDist = rightHit ? rightHit.toi : Infinity;
+
+      // Turn towards the direction with more space
+      avoidanceTorque.current = leftDist > rightDist ? 1 : -1;
+    }
+
+    // AI State Machine
+    switch (aiState.current) {
+      case AIState.CHASING:
+        // Calculate direction to player
+        const toPlayer = playerPositionRef.current.clone().sub(enemyPos);
+        toPlayer.y = 0; // Keep on horizontal plane
+        const distanceToPlayer = toPlayer.length();
+        toPlayer.normalize();
+
+        // Calculate steering direction
+        const cross = new THREE.Vector3().crossVectors(forwardDir, toPlayer);
+        const turnDirection = cross.y > 0 ? 1 : -1;
+
+        // Calculate how aligned we are with the player
+        const alignment = forwardDir.dot(toPlayer);
+
+        // Apply steering torque
+        if (distanceToPlayer > 2) {
+          const turnSpeed = GAME_CONFIG.enemyTurnSpeed * delta;
+          const torque = new THREE.Vector3(0, turnDirection * turnSpeed, 0);
+          rigidBody.applyTorqueImpulse(
+            torque.multiplyScalar(rigidBody.mass()),
+            true,
+          );
+        }
+
+        // Apply forward acceleration
+        rigidBody.applyImpulse(
+          forwardDir
+            .clone()
+            .multiplyScalar(
+              -GAME_CONFIG.enemyAcceleration * rigidBody.mass() * delta * 60,
+            ),
+          true,
+        );
+        break;
+
+      case AIState.AVOIDING_WALL:
+        const elapsedTime =
+          (state.clock.getElapsedTime() - avoidanceState.current.startTime) *
+          1000;
+        if (elapsedTime > avoidanceState.current.duration) {
+          aiState.current = AIState.CHASING;
+          avoidanceState.current.active = false;
+        } else {
+          // Apply the determined avoidance torque
+          const avoidTurnSpeed = GAME_CONFIG.enemyTurnSpeed * delta * 1.5; // Turn faster
+          const avoidTorque = new THREE.Vector3(
+            0,
+            avoidanceTorque.current * avoidTurnSpeed,
+            0,
+          );
+          rigidBody.applyTorqueImpulse(
+            avoidTorque.multiplyScalar(rigidBody.mass()),
+            true,
+          );
+        }
+        break;
+    }
 
     // Lateral Friction (same as player car)
     const lateralVel = vel.dot(rightDir);
@@ -70,38 +188,6 @@ export function EnemyUnit({
       return rightDir.clone().multiplyScalar(changeVelocity * rigidBody.mass());
     };
     rigidBody.applyImpulse(frictionImpulse(), true);
-
-    // Calculate steering direction
-    // Determine if player is to the left or right
-    const cross = new THREE.Vector3().crossVectors(forwardDir, toPlayer);
-    const turnDirection = cross.y > 0 ? 1 : -1; // Positive = turn left, negative = turn right
-
-    // Calculate how aligned we are with the player
-    const alignment = forwardDir.dot(toPlayer);
-
-    // Apply steering torque
-    if (distanceToPlayer > 2) {
-      // Only steer if not too close
-      const turnSpeed = GAME_CONFIG.enemyTurnSpeed * delta;
-      const torque = new THREE.Vector3(0, turnDirection * turnSpeed, 0);
-      rigidBody.applyTorqueImpulse(
-        torque.multiplyScalar(rigidBody.mass()),
-        true,
-      );
-    }
-
-    // Apply forward acceleration when roughly facing the player
-    if (alignment > 0.3) {
-      // Only accelerate when facing somewhat toward player
-      rigidBody.applyImpulse(
-        forwardDir
-          .clone()
-          .multiplyScalar(
-            -GAME_CONFIG.enemyAcceleration * rigidBody.mass() * delta * 60,
-          ),
-        true,
-      );
-    }
 
     // Limit max speed
     if (vel.length() > GAME_CONFIG.enemyMaxSpeed) {
@@ -150,7 +236,10 @@ export function EnemyUnit({
       collisionGroups={0x00020002} // Group 2, collides with group 2 (player)
     >
       {sceneCloneRef.current && (
-        <primitive object={sceneCloneRef.current} scale={GAME_CONFIG.enemyScale} />
+        <primitive
+          object={sceneCloneRef.current}
+          scale={GAME_CONFIG.enemyScale}
+        />
       )}
     </RigidBody>
   );

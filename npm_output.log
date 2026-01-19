@@ -1,0 +1,25 @@
+
+> dev
+> react-router dev -p 5999
+
+  ➜  Local:   http://localhost:5999/
+  ➜  Network: use --host to expose
+12:49:23 PM [vite] (client) ✨ new dependencies optimized: @react-three/fiber, @react-three/drei, @react-three/rapier, three
+12:49:23 PM [vite] (client) ✨ optimized dependencies changed. reloading
+12:50:50 PM [vite] (client) hmr update /app/game/index.tsx, /app/game/components/Car.tsx, /app/game/components/EnemyGroup.tsx, /app/game/components/HPBar.tsx, /app/game/components/Minimap.tsx, /app/game/hooks/useGameLoader.tsx, /app/game/hooks/useGameState.tsx, /app/game/components/EnemyUnit.tsx
+12:50:50 PM [vite] (client) hmr update /app/game/index.tsx, /app/game/components/Car.tsx, /app/game/components/EnemyGroup.tsx, /app/game/components/HPBar.tsx, /app/game/components/Minimap.tsx, /app/game/hooks/useGameLoader.tsx, /app/game/hooks/useGameState.tsx, /app/game/components/EnemyUnit.tsx
+12:50:50 PM [vite] (client) hmr update /app/app.css, /app/game/index.tsx, /app/game/components/Car.tsx, /app/game/components/EnemyGroup.tsx, /app/game/components/HPBar.tsx, /app/game/components/Minimap.tsx, /app/game/hooks/useGameLoader.tsx, /app/game/hooks/useGameState.tsx, /app/game/components/EnemyUnit.tsx
+12:50:50 PM [vite] (ssr) page reload app/game/constants/gameConfig.ts
+12:50:55 PM [vite] (client) hmr update /app/app.css
+12:50:55 PM [vite] (ssr) hmr update /app/app.css
+12:51:00 PM [vite] (client) hmr update /app/app.css
+12:51:00 PM [vite] (ssr) hmr update /app/app.css
+12:51:05 PM [vite] (client) hmr update /app/app.css
+12:51:05 PM [vite] (ssr) hmr update /app/app.css
+12:51:10 PM [vite] (client) hmr update /app/app.css
+12:51:10 PM [vite] (ssr) hmr update /app/app.css
+12:51:18 PM [vite] (client) hmr update /app/app.css
+12:51:18 PM [vite] (ssr) hmr update /app/app.css
+12:51:21 PM [vite] (client) hmr update /app/app.css
+12:51:21 PM [vite] (ssr) hmr update /app/app.css
+12:51:21 PM [react-router] Config saved

@@ -52,8 +52,10 @@ export const GAME_CONFIG = {
   enemyMass: 200,
   enemyScale: 0.5,
   enemyMaxSpeed: 15.0,
-  enemyAcceleration: 0.8,
-  enemyTurnSpeed: 2.5,
+  enemyAcceleration: 1.2,
+  enemyTurnSpeed: 3.0,
+  enemyRaycastDistance: 5,
+  enemyAvoidanceDuration: 500, // ms
   enemySpawnDistance: 25, // Distance from center
   enemySpawnInterval: 15000, // 15 seconds in milliseconds
   enemyDespawnDistance: 35, // Distance from center to despawn enemy
