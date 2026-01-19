@@ -42,6 +42,19 @@ export const GAME_CONFIG = {
 
   // Loader settings
   loaderMinDuration: 5000, // 5 seconds
+
+  // Gameplay settings
+  playerMaxHP: 100,
+  collisionDamage: 20,
+  damageCooldown: 1000, // 1 second between damage
+
+  // Enemy settings
+  enemyMass: 200,
+  enemyScale: 0.5,
+  enemyMaxSpeed: 15.0,
+  enemyAcceleration: 0.8,
+  enemyTurnSpeed: 2.5,
+  enemySpawnDistance: 25, // Distance from center
 } as const;
 
 // Obstacle positions

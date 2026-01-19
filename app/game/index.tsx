@@ -2,25 +2,48 @@ import { Canvas } from "@react-three/fiber";
 import { OrthographicCamera, Environment, Sky } from "@react-three/drei";
 import { useRef, Suspense } from "react";
 import { Physics } from "@react-three/rapier";
+import * as THREE from "three";
 import type { DustSystemHandle } from "./DustSystem";
 import { DustSystem } from "./DustSystem";
 import { Car } from "./components/Car";
 import { Ground } from "./components/Ground";
 import { Wall } from "./components/Wall";
-import { Obstacle } from "./components/Obstacle";
+import { Enemy } from "./components/Enemy";
+import { HPBar } from "./components/HPBar";
+import { GameOverScreen } from "./components/GameOverScreen";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useGameLoader } from "./hooks/useGameLoader";
-import { GAME_CONFIG, OBSTACLE_POSITIONS } from "./constants/gameConfig";
+import { useGameState } from "./hooks/useGameState";
+import { GAME_CONFIG } from "./constants/gameConfig";
 
 export function App() {
   const halfSize = GAME_CONFIG.mapSize / 2;
   const dustRef = useRef<DustSystemHandle>(null);
+  const playerPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 2, 0));
   const { showGame, active, progress } = useGameLoader();
+  const { hp, isGameOver, takeDamage, restartGame } = useGameState();
+
+  const handleCollision = () => {
+    if (!isGameOver) {
+      takeDamage(GAME_CONFIG.collisionDamage);
+    }
+  };
+
+  const handleRestart = () => {
+    restartGame();
+    // Reset player position
+    if (playerPositionRef.current) {
+      playerPositionRef.current.set(0, 2, 0);
+    }
+  };
 
   return (
     <div className="h-screen w-screen bg-slate-900 relative">
       {/* Loading Screen */}
       {!showGame && <LoadingScreen active={active} progress={progress} />}
+
+      {/* Game Over Screen */}
+      {isGameOver && <GameOverScreen onRestart={handleRestart} />}
 
       <Canvas shadows>
         <OrthographicCamera
@@ -54,7 +77,13 @@ export function App() {
 
         <Suspense fallback={null}>
           <Physics gravity={GAME_CONFIG.gravity}>
-            <Car dustRef={dustRef} />
+            <Car
+              dustRef={dustRef}
+              onCollision={handleCollision}
+              positionRef={playerPositionRef}
+              isDisabled={isGameOver}
+            />
+            <Enemy playerPositionRef={playerPositionRef} dustRef={dustRef} />
             <DustSystem ref={dustRef} />
             <Ground />
 
@@ -91,11 +120,6 @@ export function App() {
                 GAME_CONFIG.mapSize,
               ]}
             />
-
-            {/* Obstacles */}
-            {OBSTACLE_POSITIONS.map((position, index) => (
-              <Obstacle key={index} position={position} />
-            ))}
           </Physics>
         </Suspense>
       </Canvas>
@@ -104,9 +128,16 @@ export function App() {
       <div
         className={`absolute top-4 left-4 text-white font-mono pointer-events-none select-none z-10 transition-opacity duration-1000 ${showGame ? "opacity-100" : "opacity-0"}`}
       >
-        <h1 className="text-xl font-bold">Racer Physics</h1>
+        <h1 className="text-xl font-bold">Racer Survival</h1>
         <p>WASD / Arrows to Drive</p>
-        <p>Push the bricks!</p>
+        <p>Avoid the enemy van!</p>
+      </div>
+
+      {/* HP Bar */}
+      <div
+        className={`absolute bottom-4 left-4 text-white font-mono pointer-events-none select-none z-10 transition-opacity duration-1000 ${showGame ? "opacity-100" : "opacity-0"}`}
+      >
+        <HPBar hp={hp} />
       </div>
     </div>
   );

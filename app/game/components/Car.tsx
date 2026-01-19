@@ -9,9 +9,17 @@ import { GAME_CONFIG } from "../constants/gameConfig";
 
 interface CarProps {
   dustRef: React.RefObject<DustSystemHandle | null>;
+  onCollision?: () => void;
+  positionRef?: React.RefObject<THREE.Vector3 | null>;
+  isDisabled?: boolean;
 }
 
-export function Car({ dustRef }: CarProps) {
+export function Car({
+  dustRef,
+  onCollision,
+  positionRef,
+  isDisabled,
+}: CarProps) {
   const { scene } = useGLTF("/assets/cars/race.glb");
   const rigidBodyRef = useRef<RapierRigidBody>(null);
   const keys = useKeyboardControls();
@@ -27,6 +35,15 @@ export function Car({ dustRef }: CarProps) {
 
   useFrame((state, delta) => {
     if (!rigidBodyRef.current) return;
+
+    // Update position ref for enemy AI
+    const pos = rigidBodyRef.current.translation();
+    if (positionRef?.current) {
+      positionRef.current.set(pos.x, pos.y, pos.z);
+    }
+
+    // Don't process input if disabled
+    if (isDisabled) return;
 
     const forwardInput = keys.ArrowUp || keys.w;
     const backwardInput = keys.ArrowDown || keys.s;
@@ -110,7 +127,6 @@ export function Car({ dustRef }: CarProps) {
       );
     }
 
-    const pos = rigidBody.translation();
     const vecPos = new THREE.Vector3(pos.x, pos.y, pos.z);
 
     // Dust Emission
@@ -162,6 +178,13 @@ export function Car({ dustRef }: CarProps) {
       linearDamping={GAME_CONFIG.linearDamping}
       angularDamping={GAME_CONFIG.angularDamping}
       friction={GAME_CONFIG.carFriction}
+      collisionGroups={0x00020002} // Group 2, collides with group 2 (enemy)
+      onCollisionEnter={(event) => {
+        // Check if collision is with enemy (group 2)
+        if (onCollision) {
+          onCollision();
+        }
+      }}
     >
       <primitive object={scene} scale={GAME_CONFIG.carScale} />
     </RigidBody>
