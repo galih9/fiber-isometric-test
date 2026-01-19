@@ -1,30 +1,36 @@
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
-import { useRef, useMemo } from "react";
+import { useRef, useEffect } from "react";
 import * as THREE from "three";
 import { RigidBody, RapierRigidBody } from "@react-three/rapier";
 import type { DustSystemHandle } from "../DustSystem";
 import { GAME_CONFIG } from "../constants/gameConfig";
 
-interface EnemyProps {
+interface EnemyUnitProps {
+  id: string;
+  spawnPosition: [number, number, number];
   playerPositionRef: React.RefObject<THREE.Vector3 | null>;
   dustRef: React.RefObject<DustSystemHandle | null>;
+  onPositionUpdate: (pos: THREE.Vector3) => void;
 }
 
-export function Enemy({ playerPositionRef, dustRef }: EnemyProps) {
+export function EnemyUnit({
+  id,
+  spawnPosition,
+  playerPositionRef,
+  dustRef,
+  onPositionUpdate,
+}: EnemyUnitProps) {
   const { scene } = useGLTF("/assets/cars/van.glb");
   const rigidBodyRef = useRef<RapierRigidBody>(null);
+  const sceneCloneRef = useRef<THREE.Object3D | null>(null);
 
-  // Random spawn position
-  const spawnPosition = useMemo(() => {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = GAME_CONFIG.enemySpawnDistance;
-    return [Math.cos(angle) * distance, 2, Math.sin(angle) * distance] as [
-      number,
-      number,
-      number,
-    ];
-  }, []);
+  // Clone the scene for this enemy instance
+  useEffect(() => {
+    if (scene) {
+      sceneCloneRef.current = scene.clone();
+    }
+  }, [scene]);
 
   useFrame((state, delta) => {
     if (!rigidBodyRef.current || !playerPositionRef.current) return;
@@ -47,6 +53,9 @@ export function Enemy({ playerPositionRef, dustRef }: EnemyProps) {
     const enemyPos = new THREE.Vector3(pos.x, pos.y, pos.z);
     const linVel = rigidBody.linvel();
     const vel = new THREE.Vector3(linVel.x, linVel.y, linVel.z);
+
+    // Update position for parent
+    onPositionUpdate(enemyPos);
 
     // Calculate direction to player
     const toPlayer = playerPositionRef.current.clone().sub(enemyPos);
@@ -140,7 +149,9 @@ export function Enemy({ playerPositionRef, dustRef }: EnemyProps) {
       friction={GAME_CONFIG.carFriction}
       collisionGroups={0x00020002} // Group 2, collides with group 2 (player)
     >
-      <primitive object={scene} scale={GAME_CONFIG.enemyScale} />
+      {sceneCloneRef.current && (
+        <primitive object={sceneCloneRef.current} scale={GAME_CONFIG.enemyScale} />
+      )}
     </RigidBody>
   );
 }

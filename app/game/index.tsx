@@ -1,6 +1,6 @@
 import { Canvas } from "@react-three/fiber";
 import { OrthographicCamera, Environment, Sky } from "@react-three/drei";
-import { useRef, Suspense } from "react";
+import { useRef, Suspense, useEffect, useState } from "react";
 import { Physics } from "@react-three/rapier";
 import * as THREE from "three";
 import type { DustSystemHandle } from "./DustSystem";
@@ -8,8 +8,9 @@ import { DustSystem } from "./DustSystem";
 import { Car } from "./components/Car";
 import { Ground } from "./components/Ground";
 import { Wall } from "./components/Wall";
-import { Enemy } from "./components/Enemy";
+import { EnemyGroup } from "./components/EnemyGroup";
 import { HPBar } from "./components/HPBar";
+import { Minimap } from "./components/Minimap";
 import { GameOverScreen } from "./components/GameOverScreen";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useGameLoader } from "./hooks/useGameLoader";
@@ -20,8 +21,34 @@ export function App() {
   const halfSize = GAME_CONFIG.mapSize / 2;
   const dustRef = useRef<DustSystemHandle>(null);
   const playerPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 2, 0));
+  const enemyPositionsRef = useRef<Map<string, THREE.Vector3>>(new Map());
+  const [enemyPositions, setEnemyPositions] = useState<Map<string, THREE.Vector3>>(new Map());
   const { showGame, active, progress } = useGameLoader();
-  const { hp, isGameOver, takeDamage, restartGame } = useGameState();
+  const {
+    hp,
+    isGameOver,
+    enemies,
+    enemiesEnabled,
+    takeDamage,
+    removeEnemy,
+    updateEnemySpawning,
+    toggleEnemies,
+    restartGame,
+  } = useGameState();
+
+  // Update enemy spawning on every frame
+  useEffect(() => {
+    const interval = setInterval(() => {
+      updateEnemySpawning();
+    }, 100); // Check every 100ms
+
+    return () => clearInterval(interval);
+  }, [updateEnemySpawning]);
+
+  // Update minimap positions from enemy group
+  useEffect(() => {
+    setEnemyPositions(new Map(enemyPositionsRef.current));
+  }, [enemies.length]);
 
   const handleCollision = () => {
     if (!isGameOver) {
@@ -83,7 +110,18 @@ export function App() {
               positionRef={playerPositionRef}
               isDisabled={isGameOver}
             />
-            <Enemy playerPositionRef={playerPositionRef} dustRef={dustRef} />
+            {enemiesEnabled && (
+              <EnemyGroup
+                enemies={enemies}
+                playerPositionRef={playerPositionRef}
+                dustRef={dustRef}
+                onEnemyRemove={removeEnemy}
+                onPositionsUpdate={(positions) => {
+                  enemyPositionsRef.current = positions;
+                  setEnemyPositions(new Map(positions));
+                }}
+              />
+            )}
             <DustSystem ref={dustRef} />
             <Ground />
 
@@ -131,6 +169,22 @@ export function App() {
         <h1 className="text-xl font-bold">Racer Survival</h1>
         <p>WASD / Arrows to Drive</p>
         <p>Avoid the enemy van!</p>
+        <p className="mt-2 text-sm">Enemies: {enemies.length}</p>
+      </div>
+
+      {/* HUD Controls */}
+      <div
+        className={`absolute top-4 right-4 text-white font-mono pointer-events-auto select-none z-10 transition-opacity duration-1000 ${showGame ? "opacity-100" : "opacity-0"}`}
+      >
+        <label className="flex items-center gap-2 cursor-pointer hover:text-yellow-400 transition-colors">
+          <input
+            type="checkbox"
+            checked={enemiesEnabled}
+            onChange={toggleEnemies}
+            className="w-4 h-4 cursor-pointer"
+          />
+          <span>Enable Enemies</span>
+        </label>
       </div>
 
       {/* HP Bar */}
@@ -138,6 +192,17 @@ export function App() {
         className={`absolute bottom-4 left-4 text-white font-mono pointer-events-none select-none z-10 transition-opacity duration-1000 ${showGame ? "opacity-100" : "opacity-0"}`}
       >
         <HPBar hp={hp} />
+      </div>
+
+      {/* Minimap */}
+      <div
+        className={`pointer-events-none select-none z-10 transition-opacity duration-1000 ${showGame ? "opacity-100" : "opacity-0"}`}
+      >
+        <Minimap
+          playerPosition={playerPositionRef.current}
+          enemies={enemies}
+          enemyPositions={enemyPositions}
+        />
       </div>
     </div>
   );
