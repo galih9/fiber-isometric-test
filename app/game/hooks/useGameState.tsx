@@ -13,31 +13,10 @@ export function useGameState() {
   const [enemiesEnabled, setEnemiesEnabled] = useState(true);
   const lastDamageTime = useRef(0);
   const enemyCounterRef = useRef(0);
+  const lastEnemySpawnTime = useRef(0);
   const initializedRef = useRef(false);
 
-  // Spawn initial 5 enemies on mount
-  useEffect(() => {
-    if (!initializedRef.current) {
-      initializedRef.current = true;
-      const initialEnemies: Enemy[] = [];
-      
-      for (let i = 0; i < 5; i++) {
-        const angle = (i / 5) * Math.PI * 2;
-        const distance = 20;
-        initialEnemies.push({
-          id: `enemy-${i}`,
-          spawnPosition: [
-            Math.cos(angle) * distance,
-            2,
-            Math.sin(angle) * distance,
-          ],
-        });
-      }
-      
-      setEnemies(initialEnemies);
-      enemyCounterRef.current = 5;
-    }
-  }, []);
+
 
   const takeDamage = useCallback((amount: number) => {
     const now = Date.now();
@@ -76,6 +55,17 @@ export function useGameState() {
 
     setEnemies((prev) => [...prev, newEnemy]);
   }, []);
+
+  // Spawn enemy every 15 seconds
+  useEffect(() => {
+    if (!enemiesEnabled) return;
+
+    const intervalId = setInterval(() => {
+      spawnEnemy();
+    }, GAME_CONFIG.enemySpawnInterval);
+
+    return () => clearInterval(intervalId);
+  }, [enemiesEnabled, spawnEnemy]);
 
   const removeEnemy = useCallback((id: string) => {
     setEnemies((prev) => prev.filter((e) => e.id !== id));

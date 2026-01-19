@@ -8,7 +8,7 @@ export const GAME_CONFIG = {
   // Car settings
   carMass: 150,
   carScale: 0.5,
-  carInitialPosition: [0, 2, 0] as [number, number, number],
+  carInitialPosition: [0, 0.2, 0] as [number, number, number],
   linearDamping: 0.8,
   angularDamping: 1.5,
   carFriction: 0.5,
@@ -49,6 +49,7 @@ export const GAME_CONFIG = {
   damageCooldown: 1000, // 1 second between damage
 
   // Enemy settings
+  enemyMaxHP: 100,
   enemyMass: 200,
   enemyScale: 0.5,
   enemyMaxSpeed: 15.0,
@@ -57,6 +58,8 @@ export const GAME_CONFIG = {
   enemySpawnDistance: 25, // Distance from center
   enemySpawnInterval: 15000, // 15 seconds in milliseconds
   enemyDespawnDistance: 35, // Distance from center to despawn enemy
+  collisionGroupStatic: 0x00010002, // Member 1, Filter 2 (Dynamic)
+  collisionGroupDynamic: 0x00020003, // Member 2, Filter 1 (Static) | 2 (Dynamic)
 } as const;
 
 // Obstacle positions

@@ -1,6 +1,6 @@
 import { useFrame } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
-import { useRef, useMemo } from "react";
+import { useGLTF, Html } from "@react-three/drei";
+import { useRef, useMemo, useState, useCallback } from "react";
 import * as THREE from "three";
 import { RigidBody, RapierRigidBody } from "@react-three/rapier";
 import type { DustSystemHandle } from "../DustSystem";
@@ -20,20 +20,42 @@ export function EnemyUnit({
   playerPositionRef,
   dustRef,
   onPositionUpdate,
-}: EnemyUnitProps) {
+  onDeath,
+}: EnemyUnitProps & { onDeath: (id: string) => void }) {
   const { scene } = useGLTF("/assets/cars/van.glb");
   const rigidBodyRef = useRef<RapierRigidBody>(null);
   const clonedSceneRef = useRef<THREE.Object3D | null>(null);
   const lastPositionRef = useRef(new THREE.Vector3(...spawnPosition));
-  const stuckFrameCountRef = useRef(0);
+  const [hp, setHp] = useState<number>(GAME_CONFIG.enemyMaxHP);
+
   const frameCountRef = useRef(0);
 
   // Clone scene once and store in ref
   useMemo(() => {
     if (scene && !clonedSceneRef.current) {
       clonedSceneRef.current = scene.clone();
+      // Ensure the scene and its children cast/receive shadows if needed
+      clonedSceneRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
     }
   }, [scene]);
+
+  const takeDamage = useCallback(
+    (amount: number) => {
+      setHp((prev) => {
+        const newHp = Math.max(0, prev - amount);
+        if (newHp <= 0) {
+          onDeath(id);
+        }
+        return newHp;
+      });
+    },
+    [id, onDeath],
+  );
 
   useFrame((state, delta) => {
     if (!rigidBodyRef.current) return;
@@ -43,7 +65,7 @@ export function EnemyUnit({
     const rigidBody = rigidBodyRef.current;
     const pos = rigidBody.translation();
     const enemyPos = new THREE.Vector3(pos.x, pos.y, pos.z);
-    
+
     // Update position for parent component
     onPositionUpdate(enemyPos);
 
@@ -56,7 +78,7 @@ export function EnemyUnit({
       rotation.w,
     );
 
-    const forwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(quaternion);
+    const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(quaternion);
     const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
 
     // Get velocities
@@ -65,19 +87,6 @@ export function EnemyUnit({
     const forwardSpeed = vel.dot(forwardDir);
     const currentSpeed = vel.length();
 
-    // === STUCK DETECTION (disabled for first 3 seconds) ===
-    const distanceMoved = enemyPos.distanceTo(lastPositionRef.current);
-    
-    // Only check stuck detection after 3 seconds (180 frames at 60fps)
-    if (frameCountRef.current > 180) {
-      if (currentSpeed < 1.5 && distanceMoved < 0.1) {
-        stuckFrameCountRef.current++;
-      } else {
-        stuckFrameCountRef.current = 0;
-      }
-    }
-    
-    const isStuck = stuckFrameCountRef.current > 120;
     lastPositionRef.current.copy(enemyPos);
 
     // Calculate direction to player
@@ -99,8 +108,9 @@ export function EnemyUnit({
 
     // === SIMPLE CHASING BEHAVIOR ===
     // Drive toward player at full power
-    const driveForce = isStuck ? 0.6 : 1.5; // Much stronger drive force
-    
+
+    const driveForce = 1.5; // Much stronger drive force
+
     if (distanceToPlayer > 1.5) {
       rigidBody.applyImpulse(
         forwardDir
@@ -115,10 +125,11 @@ export function EnemyUnit({
       dirToPlayer.normalize();
       const steerCross = new THREE.Vector3().crossVectors(forwardDir, dirToPlayer);
       const steerAmount = steerCross.y > 0 ? 1 : -1;
-      
-      // Moderate steering - not too weak, not too fast
-      const turnSpeed = GAME_CONFIG.turnSpeed * delta * 0.35;
+
+      // Stronger steering to escape walls
+      const turnSpeed = GAME_CONFIG.turnSpeed * delta * 2.0;
       const steerTorque = new THREE.Vector3(0, steerAmount * turnSpeed, 0);
+
       rigidBody.applyTorqueImpulse(
         steerTorque.multiplyScalar(rigidBody.mass()),
         true
@@ -134,24 +145,9 @@ export function EnemyUnit({
       rigidBody.setLinvel(limitedVel, true);
     }
 
-    // === BOUNDARY CHECK (prevent flying or going too far out) ===
-    const mapHalf = GAME_CONFIG.mapSize / 2;
-    const wallMargin = 2;
-    
-    // If approaching boundary, reduce forward velocity
-    let boundaryPenalty = 1;
-    if (enemyPos.x > mapHalf - wallMargin) boundaryPenalty = 0.3;
-    if (enemyPos.x < -mapHalf + wallMargin) boundaryPenalty = 0.3;
-    if (enemyPos.z > mapHalf - wallMargin) boundaryPenalty = 0.3;
-    if (enemyPos.z < -mapHalf + wallMargin) boundaryPenalty = 0.3;
-    if (enemyPos.y > 5) boundaryPenalty = 0; // Stop upward velocity
-    if (enemyPos.y < 1) boundaryPenalty = 0; // Stop downward velocity
-    
-    // Apply penalty by clamping forward velocity
-    if (boundaryPenalty < 1) {
-      const newVel = vel.clone().multiplyScalar(boundaryPenalty);
-      rigidBody.setLinvel(newVel, true);
-    }
+    // === BOUNDARY CHECK (physics based now) ===
+    // Physics engine will handle wall collisions based on updated collision groups
+
 
     // === DUST EMISSION ===
     const absForwardSpeed = Math.abs(forwardSpeed);
@@ -191,9 +187,23 @@ export function EnemyUnit({
       linearDamping={GAME_CONFIG.linearDamping}
       angularDamping={GAME_CONFIG.angularDamping}
       friction={GAME_CONFIG.carFriction}
-      collisionGroups={0x00020002}
+      collisionGroups={0x00020003} // Dynamic group
+      onCollisionEnter={(payload) => {
+        // Simple damage logic on collision with anything dynamic (like player)
+        // You might want to filter this by payload.other.rigidBodyObject.name or collision groups
+        // For now, let's assume valid high impact collisions cause damage
+        const impulse = payload.manifold.contactImpulse(0);
+        if (impulse > 100) { // arbitrary threshold
+          takeDamage(10);
+        }
+      }}
     >
       <primitive object={clonedSceneRef.current} scale={GAME_CONFIG.carScale} />
+      <Html position={[0, 2, 0]} center>
+        <div style={{ width: '50px', height: '5px', background: 'red', border: '1px solid black' }}>
+          <div style={{ width: `${(hp / GAME_CONFIG.enemyMaxHP) * 100}%`, height: '100%', background: 'green' }} />
+        </div>
+      </Html>
     </RigidBody>
   );
 }

@@ -54,6 +54,7 @@ export function EnemyGroup({
           onPositionUpdate={(pos) =>
             enemyPositionsRef.current.set(enemy.id, pos)
           }
+          onDeath={onEnemyRemove}
         />
       ))}
     </>

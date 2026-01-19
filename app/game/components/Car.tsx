@@ -178,7 +178,7 @@ export function Car({
       linearDamping={GAME_CONFIG.linearDamping}
       angularDamping={GAME_CONFIG.angularDamping}
       friction={GAME_CONFIG.carFriction}
-      collisionGroups={0x00020002} // Group 2, collides with group 2 (enemy)
+      collisionGroups={0x00020003} // Dynamic group
       onCollisionEnter={(event) => {
         // Check if collision is with enemy (group 2)
         if (onCollision) {
