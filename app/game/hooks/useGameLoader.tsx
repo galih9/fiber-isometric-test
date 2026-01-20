@@ -4,24 +4,20 @@ import { GAME_CONFIG } from "../constants/gameConfig";
 
 export function useGameLoader() {
   const { active, progress } = useProgress();
-  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
   const [showGame, setShowGame] = useState(false);
 
   useEffect(() => {
-    // Force wait for minimum duration
-    const timer = setTimeout(() => {
-      setMinTimeElapsed(true);
-    }, GAME_CONFIG.loaderMinDuration);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    // If minimum time passed AND no loading (assets done), show game
-    if (minTimeElapsed && !active) {
-      setShowGame(true);
+    // Determine if fully loaded
+    // active becomes false when all assets are loaded.
+    // progress becomes 100.
+    // We add a small delay to ensure smooth transition
+    if (!active && progress === 100) {
+      const timer = setTimeout(() => {
+        setShowGame(true);
+      }, 500); // Small 500ms buffer
+      return () => clearTimeout(timer);
     }
-  }, [minTimeElapsed, active]);
+  }, [active, progress]);
 
   return { showGame, active, progress };
 }

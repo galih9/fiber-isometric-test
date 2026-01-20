@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { RigidBody, RapierRigidBody } from "@react-three/rapier";
 import type { DustSystemHandle } from "../DustSystem";
 import { useKeyboardControls } from "../hooks/useKeyboardControls";
-import { GAME_CONFIG } from "../constants/gameConfig";
+import { GAME_CONFIG, START_POSITIONS } from "../constants/gameConfig";
 
 interface CarProps {
   dustRef: React.RefObject<DustSystemHandle | null>;
@@ -43,124 +43,129 @@ export function Car({
     }
 
     // Don't process input if disabled
-    if (isDisabled) return;
+    if (!isDisabled) {
+      const forwardInput = keys.ArrowUp || keys.w;
+      const backwardInput = keys.ArrowDown || keys.s;
+      const leftInput = keys.ArrowLeft || keys.a;
+      const rightInput = keys.ArrowRight || keys.d;
 
-    const forwardInput = keys.ArrowUp || keys.w;
-    const backwardInput = keys.ArrowDown || keys.s;
-    const leftInput = keys.ArrowLeft || keys.a;
-    const rightInput = keys.ArrowRight || keys.d;
-
-    const rigidBody = rigidBodyRef.current;
-    const rotation = rigidBody.rotation();
-    const quaternion = new THREE.Quaternion(
-      rotation.x,
-      rotation.y,
-      rotation.z,
-      rotation.w,
-    );
-
-    // Car Direction Vectors
-    const forwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(quaternion);
-    const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
-
-    // Get current velocities (world space)
-    const linVel = rigidBody.linvel();
-    const vel = new THREE.Vector3(linVel.x, linVel.y, linVel.z);
-
-    // Lateral Friction (Tire Grip)
-    const lateralVel = vel.dot(rightDir);
-    const frictionImpulse = () => {
-      const changeVelocity = -lateralVel * GAME_CONFIG.lateralFriction;
-      return rightDir.clone().multiplyScalar(changeVelocity * rigidBody.mass());
-    };
-
-    rigidBody.applyImpulse(frictionImpulse(), true);
-
-    // Drive Force
-    if (forwardInput) {
-      rigidBody.applyImpulse(
-        forwardDir
-          .clone()
-          .multiplyScalar(
-            -GAME_CONFIG.driveSpeed * rigidBody.mass() * delta * 60,
-          ),
-        true,
+      const rigidBody = rigidBodyRef.current;
+      const rotation = rigidBody.rotation();
+      const quaternion = new THREE.Quaternion(
+        rotation.x,
+        rotation.y,
+        rotation.z,
+        rotation.w,
       );
-    }
-    if (backwardInput) {
-      rigidBody.applyImpulse(
-        forwardDir
-          .clone()
-          .multiplyScalar(
-            GAME_CONFIG.driveSpeed * rigidBody.mass() * delta * 60,
-          ),
-        true,
+
+      // Car Direction Vectors
+      const forwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(
+        quaternion,
       );
-    }
+      const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(quaternion);
 
-    // Steering
-    const forwardSpeed = vel.dot(forwardDir);
+      // Get current velocities (world space)
+      const linVel = rigidBody.linvel();
+      const vel = new THREE.Vector3(linVel.x, linVel.y, linVel.z);
 
-    // Limit max speed
-    if (vel.length() > GAME_CONFIG.maxSpeed) {
-      const clampedVel = vel.normalize().multiplyScalar(GAME_CONFIG.maxSpeed);
-      rigidBody.setLinvel(clampedVel, true);
-    }
+      // Lateral Friction (Tire Grip)
+      const lateralVel = vel.dot(rightDir);
+      const frictionImpulse = () => {
+        const changeVelocity = -lateralVel * GAME_CONFIG.lateralFriction;
+        return rightDir
+          .clone()
+          .multiplyScalar(changeVelocity * rigidBody.mass());
+      };
 
-    // Allow turning if moving
-    const absSpeed = Math.abs(forwardSpeed);
+      rigidBody.applyImpulse(frictionImpulse(), true);
 
-    if (absSpeed > 1.0 || leftInput || rightInput) {
-      // Inverse steering when reversing
-      // Trigger if pressing backward OR already moving backward
-      const isReversing =
-        forwardSpeed < -0.1 || (backwardInput && forwardSpeed < 0.5);
-      const steerMultiplier = isReversing ? -1 : 1;
-
-      const turnSpeed = GAME_CONFIG.turnSpeed * delta;
-      const torque = new THREE.Vector3(0, 0, 0);
-
-      if (leftInput) {
-        torque.y -= turnSpeed * steerMultiplier;
+      // Drive Force
+      if (forwardInput) {
+        rigidBody.applyImpulse(
+          forwardDir
+            .clone()
+            .multiplyScalar(
+              -GAME_CONFIG.driveSpeed * rigidBody.mass() * delta * 60,
+            ),
+          true,
+        );
       }
-      if (rightInput) {
-        torque.y += turnSpeed * steerMultiplier;
+      if (backwardInput) {
+        rigidBody.applyImpulse(
+          forwardDir
+            .clone()
+            .multiplyScalar(
+              GAME_CONFIG.driveSpeed * rigidBody.mass() * delta * 60,
+            ),
+          true,
+        );
       }
 
-      rigidBody.applyTorqueImpulse(
-        torque.multiplyScalar(rigidBody.mass()),
-        true,
-      );
-    }
+      // Steering
+      const forwardSpeed = vel.dot(forwardDir);
 
-    const vecPos = new THREE.Vector3(pos.x, pos.y, pos.z);
+      // Limit max speed
+      if (vel.length() > GAME_CONFIG.maxSpeed) {
+        const clampedVel = vel.normalize().multiplyScalar(GAME_CONFIG.maxSpeed);
+        rigidBody.setLinvel(clampedVel, true);
+      }
 
-    // Dust Emission
-    if (
-      absSpeed > GAME_CONFIG.dustSpeedThreshold &&
-      Math.random() < GAME_CONFIG.dustEmissionChance
-    ) {
-      const rearCenter = vecPos
-        .clone()
-        .add(forwardDir.clone().multiplyScalar(GAME_CONFIG.dustRearOffset));
+      // Allow turning if moving
+      const absSpeed = Math.abs(forwardSpeed);
 
-      // Left Wheel
-      const leftWheel = rearCenter
-        .clone()
-        .add(rightDir.clone().multiplyScalar(-GAME_CONFIG.dustWidthOffset));
-      leftWheel.y += GAME_CONFIG.dustYOffset;
+      if (absSpeed > 1.0 || leftInput || rightInput) {
+        // Inverse steering when reversing
+        // Trigger if pressing backward OR already moving backward
+        const isReversing =
+          forwardSpeed < -0.1 || (backwardInput && forwardSpeed < 0.5);
+        const steerMultiplier = isReversing ? -1 : 1;
 
-      // Right Wheel
-      const rightWheel = rearCenter
-        .clone()
-        .add(rightDir.clone().multiplyScalar(GAME_CONFIG.dustWidthOffset));
-      rightWheel.y += GAME_CONFIG.dustYOffset;
+        const turnSpeed = GAME_CONFIG.turnSpeed * delta;
+        const torque = new THREE.Vector3(0, 0, 0);
 
-      dustRef.current?.emit(leftWheel);
-      dustRef.current?.emit(rightWheel);
+        if (leftInput) {
+          torque.y -= turnSpeed * steerMultiplier;
+        }
+        if (rightInput) {
+          torque.y += turnSpeed * steerMultiplier;
+        }
+
+        rigidBody.applyTorqueImpulse(
+          torque.multiplyScalar(rigidBody.mass()),
+          true,
+        );
+      }
+
+      const vecPos = new THREE.Vector3(pos.x, pos.y, pos.z);
+
+      // Dust Emission
+      if (
+        absSpeed > GAME_CONFIG.dustSpeedThreshold &&
+        Math.random() < GAME_CONFIG.dustEmissionChance
+      ) {
+        const rearCenter = vecPos
+          .clone()
+          .add(forwardDir.clone().multiplyScalar(GAME_CONFIG.dustRearOffset));
+
+        // Left Wheel
+        const leftWheel = rearCenter
+          .clone()
+          .add(rightDir.clone().multiplyScalar(-GAME_CONFIG.dustWidthOffset));
+        leftWheel.y += GAME_CONFIG.dustYOffset;
+
+        // Right Wheel
+        const rightWheel = rearCenter
+          .clone()
+          .add(rightDir.clone().multiplyScalar(GAME_CONFIG.dustWidthOffset));
+        rightWheel.y += GAME_CONFIG.dustYOffset;
+
+        dustRef.current?.emit(leftWheel);
+        dustRef.current?.emit(rightWheel);
+      }
     }
 
     // Camera Follow Logic (Stutter Fix)
+    // Always run this even if disabled, so we see the car!
     const smoothing = 1 - Math.pow(0.001, delta);
     carPosition.current.lerp(new THREE.Vector3(pos.x, pos.y, pos.z), smoothing);
 
@@ -178,8 +183,8 @@ export function Car({
   return (
     <RigidBody
       ref={rigidBodyRef}
-      position={GAME_CONFIG.carInitialPosition}
-      rotation={[0, -Math.PI / 2, 0]} // Face the track (-90 deg Y)
+      position={START_POSITIONS[0]}
+      rotation={[0, Math.PI / 2, 0]}
       colliders="cuboid"
       mass={GAME_CONFIG.carMass}
       linearDamping={GAME_CONFIG.linearDamping}

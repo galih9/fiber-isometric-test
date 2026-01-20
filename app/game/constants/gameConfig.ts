@@ -11,7 +11,7 @@ export const GAME_CONFIG = {
   // Car settings
   carMass: 150,
   carScale: 0.5,
-  carInitialPosition: [0, 0.2, -15] as [number, number, number],
+  carInitialPosition: [-3, 0.2, -20] as [number, number, number],
   linearDamping: 0.8,
   angularDamping: 1.5,
   carFriction: 0.5,
@@ -73,9 +73,9 @@ export const TRACK_WAYPOINTS: [number, number, number][] = [
 
 // Start Positions (Grid)
 export const START_POSITIONS: [number, number, number][] = [
-  [0, 2, -15], // P1 (Player)
-  [-5, 2, -15], // P2
-  [5, 2, -15], // P3
-  [-10, 2, -15], // P4
-  [10, 2, -15], // P5
+  [-6, 0.2, -25],
+  [-9, 0.2, -20],
+  [-12, 0.2, -15],
+  [-12, 0.2, -25],
+  [-14, 0.2, -20],
 ];

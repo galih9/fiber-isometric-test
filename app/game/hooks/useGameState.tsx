@@ -13,11 +13,25 @@ export interface Enemy {
   spawnPosition: [number, number, number];
 }
 
+export interface RacerProgress {
+  id: string;
+  lap: number;
+  nextWaypointIndex: number;
+  distanceToNext: number;
+}
+
 export function useGameState() {
   const [currentLap, setCurrentLap] = useState(1); // Start at lap 1
   const [raceState, setRaceState] = useState<RaceState>("waiting");
   const [countdown, setCountdown] = useState(3);
   const [enemies, setEnemies] = useState<Enemy[]>([]);
+
+  const [racerProgress, setRacerProgress] = useState<
+    Map<string, RacerProgress>
+  >(new Map());
+  // Derived state for position
+  const [playerPositionRank, setPlayerPositionRank] = useState(1);
+
   const initializedRef = useRef(false);
 
   // Race State
@@ -31,14 +45,55 @@ export function useGameState() {
 
     // Create enemies based on Grid positions (skipping index 0 which is player)
     const racers: Enemy[] = [];
+    const initialProgress = new Map<string, RacerProgress>();
+
+    // Add Player to progress tracking
+    initialProgress.set("player", {
+      id: "player",
+      lap: 1,
+      nextWaypointIndex: 0,
+      distanceToNext: 0,
+    });
+
     for (let i = 1; i < START_POSITIONS.length; i++) {
+      const id = `racer-${i}`;
       racers.push({
-        id: `racer-${i}`,
+        id,
         spawnPosition: START_POSITIONS[i],
+      });
+      initialProgress.set(id, {
+        id,
+        lap: 1,
+        nextWaypointIndex: 0,
+        distanceToNext: 0,
       });
     }
     setEnemies(racers);
+    setRacerProgress(initialProgress);
   }, []);
+
+  const updateRacerProgress = useCallback((progress: RacerProgress) => {
+    setRacerProgress((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(progress.id, progress);
+      return newMap;
+    });
+  }, []);
+
+  // Calculate Positions
+  useEffect(() => {
+    // Sort racers
+    const racers = Array.from(racerProgress.values());
+    racers.sort((a, b) => {
+      if (a.lap !== b.lap) return b.lap - a.lap;
+      if (a.nextWaypointIndex !== b.nextWaypointIndex)
+        return b.nextWaypointIndex - a.nextWaypointIndex;
+      return a.distanceToNext - b.distanceToNext; // Smaller distance is better
+    });
+
+    const playerRank = racers.findIndex((r) => r.id === "player") + 1;
+    setPlayerPositionRank(playerRank > 0 ? playerRank : 1);
+  }, [racerProgress]);
 
   const startRace = useCallback(() => {
     if (raceState !== "waiting") return;
@@ -76,9 +131,18 @@ export function useGameState() {
         targetPosVal[2],
       );
 
+      const distance = position.distanceTo(targetPos);
+
+      // Update Player Progress
+      updateRacerProgress({
+        id: "player",
+        lap: currentLap,
+        nextWaypointIndex: targetIndex,
+        distanceToNext: distance,
+      });
+
       // Check distance to target checkpoint
-      // Using a larger radius for checkpoints to ensure player catches them
-      if (position.distanceTo(targetPos) < GAME_CONFIG.checkpointRadius) {
+      if (distance < GAME_CONFIG.checkpointRadius) {
         nextCheckpointIndexRef.current = (targetIndex + 1) % waypoints.length;
 
         // Check for Lap Completion
@@ -95,7 +159,7 @@ export function useGameState() {
         }
       }
     },
-    [raceState, finishRace],
+    [raceState, finishRace, currentLap, updateRacerProgress],
   );
 
   const restartRace = useCallback(() => {
@@ -103,7 +167,20 @@ export function useGameState() {
     setRaceState("waiting");
     nextCheckpointIndexRef.current = 0;
     lapsCompletedRef.current = 0;
-    // Note: Caller needs to call startRace again
+
+    // Reset progress
+    setRacerProgress((prev) => {
+      const newMap = new Map();
+      prev.forEach((val, key) => {
+        newMap.set(key, {
+          ...val,
+          lap: 1,
+          nextWaypointIndex: 0,
+          distanceToNext: 0,
+        });
+      });
+      return newMap;
+    });
   }, []);
 
   return {
@@ -112,9 +189,11 @@ export function useGameState() {
     raceState,
     countdown,
     enemies,
+    playerPositionRank,
     startRace,
     finishRace,
     restartRace,
     checkCheckpoint,
+    updateRacerProgress,
   };
 }

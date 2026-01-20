@@ -4,12 +4,17 @@ import * as THREE from "three";
 import type { DustSystemHandle } from "../DustSystem";
 import type { Enemy } from "../hooks/useGameState";
 import { EnemyUnit } from "./EnemyUnit";
-import { GAME_CONFIG } from "../constants/gameConfig";
 
 interface EnemyGroupProps {
   enemies: Enemy[];
   dustRef: React.RefObject<DustSystemHandle | null>;
   onPositionsUpdate?: (positions: Map<string, THREE.Vector3>) => void;
+  onProgressUpdate?: (progress: {
+    id: string;
+    lap: number;
+    nextWaypointIndex: number;
+    distanceToNext: number;
+  }) => void;
   isRacing: boolean;
 }
 
@@ -17,6 +22,7 @@ export function EnemyGroup({
   enemies,
   dustRef,
   onPositionsUpdate,
+  onProgressUpdate,
   isRacing,
 }: EnemyGroupProps) {
   const enemyPositionsRef = useRef<Map<string, THREE.Vector3>>(new Map());
@@ -39,6 +45,7 @@ export function EnemyGroup({
           onPositionUpdate={(pos) =>
             enemyPositionsRef.current.set(enemy.id, pos)
           }
+          onProgressUpdate={onProgressUpdate}
           isRacing={isRacing}
         />
       ))}

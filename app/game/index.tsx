@@ -14,6 +14,12 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { useGameLoader } from "./hooks/useGameLoader";
 import { useGameState } from "./hooks/useGameState";
 import { GAME_CONFIG, START_POSITIONS } from "./constants/gameConfig";
+import { getOrdinal } from "./utils/format";
+import { useGLTF } from "@react-three/drei";
+
+// Preload assets to ensure they are tracked by useProgress immediately
+useGLTF.preload("/assets/cars/race.glb");
+useGLTF.preload("/assets/cars/van.glb");
 
 export function App() {
   const halfSize = GAME_CONFIG.mapSize / 2;
@@ -32,9 +38,11 @@ export function App() {
     raceState,
     countdown,
     enemies,
+    playerPositionRank,
     startRace,
     restartRace,
     checkCheckpoint,
+    updateRacerProgress,
   } = useGameState();
 
   const isRacing = raceState === "racing";
@@ -75,15 +83,19 @@ export function App() {
       {!showGame && <LoadingScreen active={active} progress={progress} />}
 
       {/* Start Game Overlay */}
+      {/* Start Game Modal */}
       {showGame && raceState === "waiting" && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="text-center">
-            <h1 className="text-6xl font-black text-white mb-8 italic tracking-tighter">
+        <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className=" backdrop-blur-md p-8 rounded-2xl border-2 border-yellow-500 shadow-[0_0_50px_rgba(234,179,8,0.3)] text-center pointer-events-auto transform transition-all hover:scale-105">
+            <h1 className="text-5xl font-black text-white mb-2 italic tracking-tighter">
               READY TO RACE?
             </h1>
+            <p className="text-yellow-400 font-mono mb-8 text-lg">
+              {totalLaps} LAPS • {enemies.length + 1} RACERS
+            </p>
             <button
               onClick={handleStart}
-              className="px-12 py-4 bg-yellow-500 hover:bg-yellow-400 text-black text-2xl font-bold rounded-lg transform transition-transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.5)] pointer-events-auto"
+              className="px-12 py-4 bg-yellow-500 hover:bg-yellow-400 text-black text-2xl font-bold rounded-xl shadow-lg transition-colors"
             >
               START ENGINE
             </button>
@@ -145,7 +157,14 @@ export function App() {
         <Environment preset="sunset" />
         <Sky sunPosition={[100, 20, 100]} />
 
-        <Suspense fallback={null}>
+        <Suspense
+          fallback={
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[5, 5, 5]} />
+              <meshBasicMaterial color="red" wireframe />
+            </mesh>
+          }
+        >
           <Physics gravity={GAME_CONFIG.gravity}>
             <Car
               dustRef={dustRef}
@@ -161,6 +180,7 @@ export function App() {
                 enemyPositionsRef.current = positions;
                 setEnemyPositions(new Map(positions));
               }}
+              onProgressUpdate={updateRacerProgress}
               isRacing={isRacing}
             />
 
@@ -180,7 +200,7 @@ export function App() {
         <p>
           Laps: {currentLap} / {totalLaps}
         </p>
-        <p>Position: 1st</p>
+        <p>Position: {getOrdinal(playerPositionRank)}</p>
       </div>
 
       {/* Minimap */}

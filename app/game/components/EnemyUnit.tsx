@@ -11,6 +11,12 @@ interface EnemyUnitProps {
   spawnPosition: [number, number, number];
   dustRef: React.RefObject<DustSystemHandle | null>;
   onPositionUpdate: (pos: THREE.Vector3) => void;
+  onProgressUpdate?: (progress: {
+    id: string;
+    lap: number;
+    nextWaypointIndex: number;
+    distanceToNext: number;
+  }) => void;
   isRacing: boolean;
 }
 
@@ -19,6 +25,7 @@ export function EnemyUnit({
   spawnPosition,
   dustRef,
   onPositionUpdate,
+  onProgressUpdate,
   isRacing,
 }: EnemyUnitProps) {
   const { scene } = useGLTF("/assets/cars/van.glb");
@@ -27,18 +34,19 @@ export function EnemyUnit({
 
   // AI State
   const currentWaypointIndexRef = useRef(0);
+  const currentLapRef = useRef(1);
+  const isFinishedRef = useRef(false);
 
-  // Clone scene once and store in ref
-  useMemo(() => {
-    if (scene && !clonedSceneRef.current) {
-      clonedSceneRef.current = scene.clone();
-      clonedSceneRef.current.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-        }
-      });
-    }
+  // Clone scene properly
+  const clonedScene = useMemo(() => {
+    const clone = scene.clone();
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    return clone;
   }, [scene]);
 
   useFrame((state, delta) => {
@@ -82,11 +90,56 @@ export function EnemyUnit({
 
     // Check if we reached the waypoint
     // Use a slightly larger radius for AI to ensure flow
-    if (enemyPos.distanceTo(targetPos) < 8.0) {
-      currentWaypointIndexRef.current =
-        (currentWaypointIndexRef.current + 1) % waypoints.length;
-      targetCoords = waypoints[currentWaypointIndexRef.current];
+    // const waypoints = TRACK_WAYPOINTS; // Already defined above
+    const currentIdx = currentWaypointIndexRef.current;
+
+    // Calculate distance to current target for progress reporting
+    const dist = enemyPos.distanceTo(targetPos);
+
+    if (dist < 8.0) {
+      const nextIdx = (currentIdx + 1) % waypoints.length;
+      currentWaypointIndexRef.current = nextIdx;
+
+      // Check for Lap Completion
+      if (currentIdx === waypoints.length - 1) {
+        currentLapRef.current += 1;
+        if (currentLapRef.current > GAME_CONFIG.totalLaps) {
+          isFinishedRef.current = true;
+        }
+      }
+
+      targetCoords = waypoints[nextIdx];
       targetPos.set(targetCoords[0], targetCoords[1], targetCoords[2]);
+    }
+
+    // Stop if finished
+    if (isFinishedRef.current) {
+      if (currentSpeed > 0.1) {
+        const brakeForce = forwardDir
+          .clone()
+          .multiplyScalar(10 * rigidBody.mass() * delta);
+        rigidBody.applyImpulse(brakeForce, true);
+        rigidBody.setLinvel(new THREE.Vector3(0, 0, 0), true);
+      }
+      return;
+    }
+
+    // Report Progress
+    if (onProgressUpdate && state.clock.elapsedTime % 0.1 < delta) {
+      // Throttle updates slightly or do it every frame?
+      // Doing it every frame might be expensive for React state updates.
+      // Let's do it every frame for now but maybe throttle in `useGameState` if needed interaction is slow.
+      // Actually `useGameState` `updateRacerProgress` updates state -> re-render.
+      // Better to throttle here.
+    }
+    // Just update every frame for smoothness of position counter? Or maybe every 10 frames.
+    if (onProgressUpdate) {
+      onProgressUpdate({
+        id,
+        lap: currentLapRef.current,
+        nextWaypointIndex: currentWaypointIndexRef.current,
+        distanceToNext: dist,
+      });
     }
 
     // Calculate Direction to Target
@@ -149,9 +202,7 @@ export function EnemyUnit({
     }
   });
 
-  if (!clonedSceneRef.current) {
-    return null;
-  }
+  // Removed ref check as clonedScene is guaranteed by useMemo with strict dependency
 
   return (
     <RigidBody
@@ -166,7 +217,7 @@ export function EnemyUnit({
       collisionGroups={GAME_CONFIG.collisionGroupDynamic}
     >
       <primitive
-        object={clonedSceneRef.current}
+        object={clonedScene}
         scale={GAME_CONFIG.enemyScale}
         rotation={[0, Math.PI, 0]} // Rotate model 180 deg to face forward (-Z)
       />
