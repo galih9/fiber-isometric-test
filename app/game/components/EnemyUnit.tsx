@@ -30,12 +30,19 @@ export function EnemyUnit({
 }: EnemyUnitProps) {
   const { scene } = useGLTF("/assets/cars/van.glb");
   const rigidBodyRef = useRef<RapierRigidBody>(null);
-  const clonedSceneRef = useRef<THREE.Object3D | null>(null);
 
   // AI State
   const currentWaypointIndexRef = useRef(0);
   const currentLapRef = useRef(1);
   const isFinishedRef = useRef(false);
+
+  // Stuck Detection functionality
+  const [aiState, setAiState] = useState<"RACING" | "REVERSING">("RACING");
+  const stuckTimerRef = useRef(0);
+  const reverseTimerRef = useRef(0);
+  const lastPosRef = useRef(
+    new THREE.Vector3(spawnPosition[0], spawnPosition[1], spawnPosition[2]),
+  );
 
   // Clone scene properly
   const clonedScene = useMemo(() => {
@@ -76,7 +83,6 @@ export function EnemyUnit({
     // Velocity
     const linVel = rigidBody.linvel();
     const vel = new THREE.Vector3(linVel.x, linVel.y, linVel.z);
-    // const forwardSpeed = vel.dot(forwardDir); // Not used currently but useful for debug
     const currentSpeed = vel.length();
 
     // === WAYPOINT FOLLOWING ===
@@ -89,11 +95,7 @@ export function EnemyUnit({
     );
 
     // Check if we reached the waypoint
-    // Use a slightly larger radius for AI to ensure flow
-    // const waypoints = TRACK_WAYPOINTS; // Already defined above
     const currentIdx = currentWaypointIndexRef.current;
-
-    // Calculate distance to current target for progress reporting
     const dist = enemyPos.distanceTo(targetPos);
 
     if (dist < 8.0) {
@@ -125,14 +127,6 @@ export function EnemyUnit({
     }
 
     // Report Progress
-    if (onProgressUpdate && state.clock.elapsedTime % 0.1 < delta) {
-      // Throttle updates slightly or do it every frame?
-      // Doing it every frame might be expensive for React state updates.
-      // Let's do it every frame for now but maybe throttle in `useGameState` if needed interaction is slow.
-      // Actually `useGameState` `updateRacerProgress` updates state -> re-render.
-      // Better to throttle here.
-    }
-    // Just update every frame for smoothness of position counter? Or maybe every 10 frames.
     if (onProgressUpdate) {
       onProgressUpdate({
         id,
@@ -142,45 +136,111 @@ export function EnemyUnit({
       });
     }
 
+    // === STUCK DETECTION ===
+    if (aiState === "RACING") {
+      // If speed is very low, increment stuck timer
+      if (currentSpeed < 1.0) {
+        stuckTimerRef.current += delta;
+      } else {
+        stuckTimerRef.current = Math.max(0, stuckTimerRef.current - delta);
+      }
+
+      // Trigger reverse if stuck for too long (e.g., 2 seconds)
+      if (stuckTimerRef.current > 1.5) {
+        setAiState("REVERSING");
+        stuckTimerRef.current = 0;
+        reverseTimerRef.current = 1.0; // Reverse for 1.0 second
+      }
+    } else if (aiState === "REVERSING") {
+      reverseTimerRef.current -= delta;
+      if (reverseTimerRef.current <= 0) {
+        setAiState("RACING");
+        stuckTimerRef.current = 0; // Reset stuck timer so we don't immediately get stuck again
+      }
+    }
+
+    // === NAVIGATION LOGIC ===
+
     // Calculate Direction to Target
     const dirToTarget = new THREE.Vector3().subVectors(targetPos, enemyPos);
     dirToTarget.y = 0; // Ignore height
     dirToTarget.normalize();
 
-    // Debug direction
-    // console.log(id, "Forward:", forwardDir, "Target:", dirToTarget);
-
-    // Steer
+    // Alignment and Steering
     const steerCross = new THREE.Vector3().crossVectors(
       forwardDir,
       dirToTarget,
     );
-    const steerAmount = steerCross.y > 0 ? 1 : -1;
-    // Calculate alignment (dot product)
+    // Proportional steering
+    // Clamp steerAmount to -1 to 1 range
+    // Multiply by sensitivity to make it turn sharpler when needed
+    const steerSensitivity = 2.0;
+    let steerAmount = THREE.MathUtils.clamp(
+      steerCross.y * steerSensitivity,
+      -1,
+      1,
+    );
+
+    // Dot product for alignment (1 = facing target, -1 = facing away)
     const alignment = forwardDir.dot(dirToTarget);
 
+    let throttle = 0;
+
+    if (aiState === "REVERSING") {
+      // Reverse Logic
+      // Steer opposite to where we wanted to go to "back out" of a turn?
+      // Or just steer straight? Let's steer opposite to the target to re-orient
+      steerAmount = -steerAmount;
+      throttle = -0.8; // Reverse throttle
+    } else {
+      // Racing Logic
+      throttle = 1.0;
+
+      // Slow down for corners
+      if (Math.abs(steerAmount) > 0.5) {
+        throttle = 0.6; // Slow down when turning hard
+      }
+
+      // If we are facing away from target, we might need a sharper turn or slower speed
+      if (alignment < 0) {
+        throttle = 0.4; // Very slow speed for U-turns
+      }
+    }
+
     // Apply Steering Torque
-    // Turn faster if alignment is off
-    const turnMult = alignment < 0.5 ? 2.0 : 1.0;
-    const turnSpeed = GAME_CONFIG.enemyTurnSpeed * delta * turnMult;
+    const turnSpeed = GAME_CONFIG.enemyTurnSpeed * delta;
     rigidBody.applyTorqueImpulse(
       new THREE.Vector3(0, steerAmount * turnSpeed * rigidBody.mass(), 0),
       true,
     );
 
-    // Drive Forward
-    // Slow down if taking a hard turn
-    const speedMult = alignment < 0.5 ? 0.5 : 1.0;
-
-    if (currentSpeed < GAME_CONFIG.enemyMaxSpeed * speedMult) {
-      rigidBody.applyImpulse(
-        forwardDir
+    // Apply Throttle/Drive Force
+    // Check max speed only if moving forward
+    if (throttle > 0) {
+      if (currentSpeed < GAME_CONFIG.enemyMaxSpeed) {
+        const driveForce = forwardDir
           .clone()
           .multiplyScalar(
-            GAME_CONFIG.enemyAcceleration * rigidBody.mass() * delta * 60,
-          ),
-        true,
-      );
+            throttle *
+              GAME_CONFIG.enemyAcceleration *
+              rigidBody.mass() *
+              delta *
+              60,
+          );
+        rigidBody.applyImpulse(driveForce, true);
+      }
+    } else {
+      // Reversing (throttle < 0) - allow exceeding max speed checks for simple reverse logic or clamp separately
+      const driveForce = forwardDir
+        .clone()
+        .multiplyScalar(
+          throttle *
+            GAME_CONFIG.enemyAcceleration *
+            rigidBody.mass() *
+            delta *
+            60,
+        );
+      rigidBody.applyImpulse(driveForce, true);
     }
 
     // === LATERAL FRICTION ===
@@ -192,17 +252,13 @@ export function EnemyUnit({
     );
 
     // === DUST EMISSION ===
-    // Simplified dust logic
-    if (currentSpeed > 5 && Math.random() < 0.1) {
-      // ... existing dust logic or simplified
+    if (currentSpeed > 5 && Math.random() < 0.1 && aiState === "RACING") {
       const rearPos = enemyPos
         .clone()
         .add(forwardDir.clone().multiplyScalar(-1.5));
       dustRef.current?.emit(rearPos);
     }
   });
-
-  // Removed ref check as clonedScene is guaranteed by useMemo with strict dependency
 
   return (
     <RigidBody
