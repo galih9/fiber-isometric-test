@@ -53,9 +53,9 @@ export const GAME_CONFIG = {
   // Enemy settings (Racers)
   enemyMass: 150, // Same as player
   enemyScale: 0.5,
-  enemyMaxSpeed: 15.0, // Slightly slower than player max
-  enemyAcceleration: 1.0,
-  enemyTurnSpeed: 3.0,
+  enemyMaxSpeed: 18.0, // Increased from 15.0
+  enemyAcceleration: 1.5, // Increased from 1.0
+  enemyTurnSpeed: 6.0, // Doubled from 3.0
   collisionGroupStatic: 0x00010002,
   collisionGroupDynamic: 0x00020003,
 } as const;
@@ -63,6 +63,7 @@ export const GAME_CONFIG = {
 // Racing Waypoints (Simple Oval)
 // 4 corners + midpoints
 export const TRACK_WAYPOINTS: [number, number, number][] = [
+  [0, 0, -20], // Start/Finish Line
   [30, 0, -20], // Turn 1 entry
   [40, 0, 0], // Turn 1 apex
   [30, 0, 20], // Turn 1 exit

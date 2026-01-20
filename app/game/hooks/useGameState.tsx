@@ -16,6 +16,7 @@ export interface Enemy {
 export interface RacerProgress {
   id: string;
   lap: number;
+  checkpointsPassed: number;
   nextWaypointIndex: number;
   distanceToNext: number;
 }
@@ -51,6 +52,7 @@ export function useGameState() {
     initialProgress.set("player", {
       id: "player",
       lap: 1,
+      checkpointsPassed: 0,
       nextWaypointIndex: 0,
       distanceToNext: 0,
     });
@@ -64,6 +66,7 @@ export function useGameState() {
       initialProgress.set(id, {
         id,
         lap: 1,
+        checkpointsPassed: 0,
         nextWaypointIndex: 0,
         distanceToNext: 0,
       });
@@ -85,10 +88,12 @@ export function useGameState() {
     // Sort racers
     const racers = Array.from(racerProgress.values());
     racers.sort((a, b) => {
-      if (a.lap !== b.lap) return b.lap - a.lap;
-      if (a.nextWaypointIndex !== b.nextWaypointIndex)
-        return b.nextWaypointIndex - a.nextWaypointIndex;
-      return a.distanceToNext - b.distanceToNext; // Smaller distance is better
+      // Primary sort: Checkpoints passed (descending)
+      if (a.checkpointsPassed !== b.checkpointsPassed) {
+        return b.checkpointsPassed - a.checkpointsPassed;
+      }
+      // Secondary sort: Distance to next checkpoint (ascending)
+      return a.distanceToNext - b.distanceToNext;
     });
 
     const playerRank = racers.findIndex((r) => r.id === "player") + 1;
@@ -133,31 +138,81 @@ export function useGameState() {
 
       const distance = position.distanceTo(targetPos);
 
-      // Update Player Progress
-      updateRacerProgress({
-        id: "player",
-        lap: currentLap,
-        nextWaypointIndex: targetIndex,
-        distanceToNext: distance,
-      });
-
       // Check distance to target checkpoint
-      if (distance < GAME_CONFIG.checkpointRadius) {
-        nextCheckpointIndexRef.current = (targetIndex + 1) % waypoints.length;
+      let newCheckpointsPassed =
+        nextCheckpointIndexRef.current +
+        lapsCompletedRef.current * waypoints.length;
 
-        // Check for Lap Completion
-        // If we pass the last waypoint (index went from Length-1 to 0)
-        if (targetIndex === waypoints.length - 1) {
+      if (distance < GAME_CONFIG.checkpointRadius) {
+        // Waypoint reached!
+        const currentWaypointIdx = nextCheckpointIndexRef.current;
+        const nextWaypointIdx = (currentWaypointIdx + 1) % waypoints.length;
+
+        nextCheckpointIndexRef.current = nextWaypointIdx;
+
+        // If we just passed the last waypoint (completed a loop logic)
+        // But specifically, we want to track total checkpoints passed.
+        // Wait, simpler logic:
+        // We know we are targeting 'targetIndex'. If we reach it, we increment our total count.
+        // But we need to be careful about state updates.
+
+        // Actually, let's track total checkpoints passed in a Ref for the player too,
+        // similar to how we might do it for enemies, to ensure consistency.
+        // But here we can just calculate it.
+
+        // If we passed waypoint [0], that means we completed 1 full loop (if we started at 0).
+        // Let's rely on simple increment.
+
+        // However, `lapsCompletedRef` logic needs to be robust.
+        if (currentWaypointIdx === waypoints.length - 1) {
+          lapsCompletedRef.current += 1;
+        }
+
+        // Recalculate based on new state
+        newCheckpointsPassed =
+          nextCheckpointIndexRef.current +
+          lapsCompletedRef.current * waypoints.length;
+
+        // Calculate Lap
+        // Lap 1: 0 checkpoints ... (Length-1) checkpoints.
+        // Lap 2: Length checkpoints ...
+        // Formula: Math.floor(checkpointsPassed / Length) + 1
+        // EXCEPT: Start->WP0 is checkpointsPassed=1.
+        // If we follow the plan: "Math.floor((checkpointsPassed - 1) / totalWaypoints) + 1"
+        // WP0 reached -> counts as 1. 1-1 / L = 0 -> Lap 1.
+        // WP(L-1) reached -> counts as L. L-1 / L = 0 -> Lap 1.
+        // WP0 next time (Lap 2) -> counts as L+1. L / L = 1 -> Lap 2.
+        // This matches the plan!
+
+        const newLap =
+          Math.floor((newCheckpointsPassed - 1) / waypoints.length) + 1;
+
+        if (newLap !== currentLap) {
           setCurrentLap((l) => {
-            const next = l + 1;
-            if (next > GAME_CONFIG.totalLaps) {
+            if (newLap > GAME_CONFIG.totalLaps) {
               finishRace();
-              return l; // Keep at max/finished
+              return l;
             }
-            return next;
+            return newLap;
           });
         }
       }
+
+      // Update Player Progress
+      updateRacerProgress({
+        id: "player",
+        lap: currentLap, // Use state, or derived? Best to use the derived one for consistency in this frame
+        checkpointsPassed: newCheckpointsPassed, // Note: this is an approximation if we didn't just cross.
+        // Actually, if we didn't cross, `newCheckpointsPassed` is correct (current target index + laps * length is actually "next target").
+        // Wait, "checkpoints passed" means how many we have *already* cleared.
+        // If I am aiming for WP0, I have passed 0.
+        // If I am aiming for WP1, I have passed 1 (WP0).
+        // So `checkpointsPassed` should be: `lapsCompletedRef.current * length + nextCheckpointIndexRef.current`
+        // YES.
+
+        nextWaypointIndex: nextCheckpointIndexRef.current,
+        distanceToNext: distance,
+      });
     },
     [raceState, finishRace, currentLap, updateRacerProgress],
   );
@@ -175,6 +230,7 @@ export function useGameState() {
         newMap.set(key, {
           ...val,
           lap: 1,
+          checkpointsPassed: 0,
           nextWaypointIndex: 0,
           distanceToNext: 0,
         });
@@ -195,5 +251,6 @@ export function useGameState() {
     restartRace,
     checkCheckpoint,
     updateRacerProgress,
+    racerProgress,
   };
 }

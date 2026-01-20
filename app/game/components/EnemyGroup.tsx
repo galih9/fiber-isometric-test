@@ -12,6 +12,7 @@ interface EnemyGroupProps {
   onProgressUpdate?: (progress: {
     id: string;
     lap: number;
+    checkpointsPassed: number;
     nextWaypointIndex: number;
     distanceToNext: number;
   }) => void;

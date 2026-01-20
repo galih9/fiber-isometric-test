@@ -12,7 +12,7 @@ import { EnemyGroup } from "./components/EnemyGroup";
 import { Minimap } from "./components/Minimap";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { useGameLoader } from "./hooks/useGameLoader";
-import { useGameState } from "./hooks/useGameState";
+import { useGameState, type RacerProgress } from "./hooks/useGameState";
 import { GAME_CONFIG, START_POSITIONS } from "./constants/gameConfig";
 import { getOrdinal } from "./utils/format";
 import { useGLTF } from "@react-three/drei";
@@ -43,6 +43,7 @@ export function App() {
     restartRace,
     checkCheckpoint,
     updateRacerProgress,
+    racerProgress,
   } = useGameState();
 
   const isRacing = raceState === "racing";
@@ -202,6 +203,44 @@ export function App() {
         </p>
         <p>Position: {getOrdinal(playerPositionRank)}</p>
       </div>
+
+      {/* DEBUG OVERLAY */}
+      {/* <div className="absolute bottom-4 right-4 bg-black/80 text-green-400 p-4 font-mono text-xs pointer-events-auto z-50 rounded select-text opacity-50 hover:opacity-100">
+        <h3 className="font-bold border-b border-green-500 mb-2">Debug Info</h3>
+        <table className="w-full">
+          <thead>
+            <tr className="text-left">
+              <th className="pr-2">ID</th>
+              <th className="pr-2">Lap</th>
+              <th className="pr-2">CPs</th>
+              <th className="pr-2">NextWP</th>
+              <th>Dist</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from(racerProgress.values())
+              .sort(
+                (a: RacerProgress, b: RacerProgress) =>
+                  b.checkpointsPassed - a.checkpointsPassed ||
+                  a.distanceToNext - b.distanceToNext,
+              )
+              .map((r: RacerProgress) => (
+                <tr
+                  key={r.id}
+                  className={
+                    r.id === "player" ? "text-yellow-400 font-bold" : ""
+                  }
+                >
+                  <td className="pr-2">{r.id}</td>
+                  <td className="pr-2">{r.lap}</td>
+                  <td className="pr-2">{r.checkpointsPassed}</td>
+                  <td className="pr-2">{r.nextWaypointIndex}</td>
+                  <td>{r.distanceToNext.toFixed(1)}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div> */}
 
       {/* Minimap */}
       <div

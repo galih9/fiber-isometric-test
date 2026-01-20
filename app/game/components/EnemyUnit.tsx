@@ -14,6 +14,7 @@ interface EnemyUnitProps {
   onProgressUpdate?: (progress: {
     id: string;
     lap: number;
+    checkpointsPassed: number;
     nextWaypointIndex: number;
     distanceToNext: number;
   }) => void;
@@ -33,6 +34,7 @@ export function EnemyUnit({
 
   // AI State
   const currentWaypointIndexRef = useRef(0);
+  const checkpointsPassedRef = useRef(0);
   const currentLapRef = useRef(1);
   const isFinishedRef = useRef(false);
 
@@ -101,10 +103,15 @@ export function EnemyUnit({
     if (dist < 8.0) {
       const nextIdx = (currentIdx + 1) % waypoints.length;
       currentWaypointIndexRef.current = nextIdx;
+      checkpointsPassedRef.current += 1;
 
       // Check for Lap Completion
-      if (currentIdx === waypoints.length - 1) {
-        currentLapRef.current += 1;
+      // Use the same formula as Player: Math.floor((checkpointsPassed - 1) / totalWaypoints) + 1
+      const newLap =
+        Math.floor((checkpointsPassedRef.current - 1) / waypoints.length) + 1;
+
+      if (newLap > currentLapRef.current) {
+        currentLapRef.current = newLap;
         if (currentLapRef.current > GAME_CONFIG.totalLaps) {
           isFinishedRef.current = true;
         }
@@ -131,6 +138,7 @@ export function EnemyUnit({
       onProgressUpdate({
         id,
         lap: currentLapRef.current,
+        checkpointsPassed: checkpointsPassedRef.current,
         nextWaypointIndex: currentWaypointIndexRef.current,
         distanceToNext: dist,
       });
@@ -145,8 +153,8 @@ export function EnemyUnit({
         stuckTimerRef.current = Math.max(0, stuckTimerRef.current - delta);
       }
 
-      // Trigger reverse if stuck for too long (e.g., 2 seconds)
-      if (stuckTimerRef.current > 1.5) {
+      // Trigger reverse if stuck for too long (e.g., 1 second)
+      if (stuckTimerRef.current > 1.0) {
         setAiState("REVERSING");
         stuckTimerRef.current = 0;
         reverseTimerRef.current = 1.0; // Reverse for 1.0 second
@@ -174,7 +182,7 @@ export function EnemyUnit({
     // Proportional steering
     // Clamp steerAmount to -1 to 1 range
     // Multiply by sensitivity to make it turn sharpler when needed
-    const steerSensitivity = 2.0;
+    const steerSensitivity = 3.5; // Increased from 2.0
     let steerAmount = THREE.MathUtils.clamp(
       steerCross.y * steerSensitivity,
       -1,
