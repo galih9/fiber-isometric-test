@@ -4,6 +4,7 @@ import { useRef, useMemo, useState, useCallback } from "react";
 import * as THREE from "three";
 import { RigidBody, RapierRigidBody } from "@react-three/rapier";
 import type { DustSystemHandle } from "../DustSystem";
+import type { TrailSystemHandle } from "../TrailSystem";
 import { GAME_CONFIG } from "../constants/gameConfig";
 
 interface EnemyUnitProps {
@@ -11,6 +12,7 @@ interface EnemyUnitProps {
   spawnPosition: [number, number, number];
   playerPositionRef: React.RefObject<THREE.Vector3 | null>;
   dustRef: React.RefObject<DustSystemHandle | null>;
+  trailRef: React.RefObject<TrailSystemHandle | null>;
   onPositionUpdate: (pos: THREE.Vector3) => void;
 }
 
@@ -19,6 +21,7 @@ export function EnemyUnit({
   spawnPosition,
   playerPositionRef,
   dustRef,
+  trailRef,
   onPositionUpdate,
   onDeath,
 }: EnemyUnitProps & { onDeath: (id: string) => void }) {
@@ -149,15 +152,56 @@ export function EnemyUnit({
     // Physics engine will handle wall collisions based on updated collision groups
 
 
+    // === TRAIL EMISSION ===
+    const isDrifting = Math.abs(lateralVel) > GAME_CONFIG.trailDriftThreshold;
+    if (isDrifting) {
+      const euler = new THREE.Euler().setFromQuaternion(quaternion);
+      const rotationY = euler.y;
+
+      // In EnemyUnit, forwardDir is (0,0,1) [Forward]
+      // Rear is at -forwardDir * dustRearOffset
+      // Front is at forwardDir * dustRearOffset (or -forwardDir * trailFrontOffset)
+
+      // Rear Left Wheel
+      const rl = enemyPos
+        .clone()
+        .add(forwardDir.clone().multiplyScalar(-GAME_CONFIG.dustRearOffset))
+        .add(rightDir.clone().multiplyScalar(-GAME_CONFIG.dustWidthOffset));
+
+      // Rear Right Wheel
+      const rr = enemyPos
+        .clone()
+        .add(forwardDir.clone().multiplyScalar(-GAME_CONFIG.dustRearOffset))
+        .add(rightDir.clone().multiplyScalar(GAME_CONFIG.dustWidthOffset));
+
+      // Front Left Wheel
+      const fl = enemyPos
+        .clone()
+        .add(forwardDir.clone().multiplyScalar(-GAME_CONFIG.trailFrontOffset))
+        .add(rightDir.clone().multiplyScalar(-GAME_CONFIG.dustWidthOffset));
+
+      // Front Right Wheel
+      const fr = enemyPos
+        .clone()
+        .add(forwardDir.clone().multiplyScalar(-GAME_CONFIG.trailFrontOffset))
+        .add(rightDir.clone().multiplyScalar(GAME_CONFIG.dustWidthOffset));
+
+      trailRef.current?.emit(rl, rotationY);
+      trailRef.current?.emit(rr, rotationY);
+      trailRef.current?.emit(fl, rotationY);
+      trailRef.current?.emit(fr, rotationY);
+    }
+
     // === DUST EMISSION ===
     const absForwardSpeed = Math.abs(forwardSpeed);
     if (
       absForwardSpeed > GAME_CONFIG.dustSpeedThreshold &&
       Math.random() < GAME_CONFIG.dustEmissionChance
     ) {
+      // Corrected to use -forwardDir for rear in EnemyUnit
       const rearPos = enemyPos
         .clone()
-        .add(forwardDir.clone().multiplyScalar(GAME_CONFIG.dustRearOffset));
+        .add(forwardDir.clone().multiplyScalar(-GAME_CONFIG.dustRearOffset));
 
       const leftWheel = rearPos
         .clone()

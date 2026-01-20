@@ -34,6 +34,10 @@ export const GAME_CONFIG = {
   dustWidthOffset: 0.6,
   dustYOffset: -0.5,
 
+  // Trail settings
+  trailDriftThreshold: 2.0,
+  trailFrontOffset: -1.2,
+
   // Obstacle settings
   obstacleScale: 3,
   obstacleMass: 5,

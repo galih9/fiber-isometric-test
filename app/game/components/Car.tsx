@@ -4,11 +4,13 @@ import { useRef } from "react";
 import * as THREE from "three";
 import { RigidBody, RapierRigidBody } from "@react-three/rapier";
 import type { DustSystemHandle } from "../DustSystem";
+import type { TrailSystemHandle } from "../TrailSystem";
 import { useKeyboardControls } from "../hooks/useKeyboardControls";
 import { GAME_CONFIG } from "../constants/gameConfig";
 
 interface CarProps {
   dustRef: React.RefObject<DustSystemHandle | null>;
+  trailRef: React.RefObject<TrailSystemHandle | null>;
   onCollision?: () => void;
   positionRef?: React.RefObject<THREE.Vector3 | null>;
   isDisabled?: boolean;
@@ -16,6 +18,7 @@ interface CarProps {
 
 export function Car({
   dustRef,
+  trailRef,
   onCollision,
   positionRef,
   isDisabled,
@@ -128,6 +131,42 @@ export function Car({
     }
 
     const vecPos = new THREE.Vector3(pos.x, pos.y, pos.z);
+
+    // Trail Emission
+    const isDrifting = Math.abs(lateralVel) > GAME_CONFIG.trailDriftThreshold;
+    if (isDrifting) {
+      const euler = new THREE.Euler().setFromQuaternion(quaternion);
+      const rotationY = euler.y;
+
+      // Rear Left Wheel
+      const rl = vecPos
+        .clone()
+        .add(forwardDir.clone().multiplyScalar(GAME_CONFIG.dustRearOffset))
+        .add(rightDir.clone().multiplyScalar(-GAME_CONFIG.dustWidthOffset));
+
+      // Rear Right Wheel
+      const rr = vecPos
+        .clone()
+        .add(forwardDir.clone().multiplyScalar(GAME_CONFIG.dustRearOffset))
+        .add(rightDir.clone().multiplyScalar(GAME_CONFIG.dustWidthOffset));
+
+      // Front Left Wheel
+      const fl = vecPos
+        .clone()
+        .add(forwardDir.clone().multiplyScalar(GAME_CONFIG.trailFrontOffset))
+        .add(rightDir.clone().multiplyScalar(-GAME_CONFIG.dustWidthOffset));
+
+      // Front Right Wheel
+      const fr = vecPos
+        .clone()
+        .add(forwardDir.clone().multiplyScalar(GAME_CONFIG.trailFrontOffset))
+        .add(rightDir.clone().multiplyScalar(GAME_CONFIG.dustWidthOffset));
+
+      trailRef.current?.emit(rl, rotationY);
+      trailRef.current?.emit(rr, rotationY);
+      trailRef.current?.emit(fl, rotationY);
+      trailRef.current?.emit(fr, rotationY);
+    }
 
     // Dust Emission
     if (

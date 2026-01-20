@@ -5,6 +5,8 @@ import { Physics } from "@react-three/rapier";
 import * as THREE from "three";
 import type { DustSystemHandle } from "./DustSystem";
 import { DustSystem } from "./DustSystem";
+import type { TrailSystemHandle } from "./TrailSystem";
+import { TrailSystem } from "./TrailSystem";
 import { Car } from "./components/Car";
 import { Ground } from "./components/Ground";
 import { Wall } from "./components/Wall";
@@ -20,6 +22,7 @@ import { GAME_CONFIG } from "./constants/gameConfig";
 export function App() {
   const halfSize = GAME_CONFIG.mapSize / 2;
   const dustRef = useRef<DustSystemHandle>(null);
+  const trailRef = useRef<TrailSystemHandle>(null);
   const playerPositionRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 2, 0));
   const enemyPositionsRef = useRef<Map<string, THREE.Vector3>>(new Map());
   const [enemyPositions, setEnemyPositions] = useState<Map<string, THREE.Vector3>>(new Map());
@@ -106,6 +109,7 @@ export function App() {
           <Physics gravity={GAME_CONFIG.gravity}>
             <Car
               dustRef={dustRef}
+              trailRef={trailRef}
               onCollision={handleCollision}
               positionRef={playerPositionRef}
               isDisabled={isGameOver}
@@ -115,6 +119,7 @@ export function App() {
                 enemies={enemies}
                 playerPositionRef={playerPositionRef}
                 dustRef={dustRef}
+                trailRef={trailRef}
                 onEnemyRemove={removeEnemy}
                 onPositionsUpdate={(positions) => {
                   enemyPositionsRef.current = positions;
@@ -123,6 +128,7 @@ export function App() {
               />
             )}
             <DustSystem ref={dustRef} />
+            <TrailSystem ref={trailRef} />
             <Ground />
 
             {/* Boundaries */}

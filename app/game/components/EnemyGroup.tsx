@@ -2,6 +2,7 @@ import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import * as THREE from "three";
 import type { DustSystemHandle } from "../DustSystem";
+import type { TrailSystemHandle } from "../TrailSystem";
 import type { Enemy } from "../hooks/useGameState";
 import { EnemyUnit } from "./EnemyUnit";
 import { GAME_CONFIG } from "../constants/gameConfig";
@@ -10,6 +11,7 @@ interface EnemyGroupProps {
   enemies: Enemy[];
   playerPositionRef: React.RefObject<THREE.Vector3 | null>;
   dustRef: React.RefObject<DustSystemHandle | null>;
+  trailRef: React.RefObject<TrailSystemHandle | null>;
   onEnemyRemove: (id: string) => void;
   onPositionsUpdate?: (positions: Map<string, THREE.Vector3>) => void;
 }
@@ -18,6 +20,7 @@ export function EnemyGroup({
   enemies,
   playerPositionRef,
   dustRef,
+  trailRef,
   onEnemyRemove,
   onPositionsUpdate,
 }: EnemyGroupProps) {
@@ -51,6 +54,7 @@ export function EnemyGroup({
           spawnPosition={enemy.spawnPosition}
           playerPositionRef={playerPositionRef}
           dustRef={dustRef}
+          trailRef={trailRef}
           onPositionUpdate={(pos) =>
             enemyPositionsRef.current.set(enemy.id, pos)
           }
