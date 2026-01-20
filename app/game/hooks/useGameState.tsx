@@ -1,5 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { GAME_CONFIG } from "../constants/gameConfig";
+import {
+  GAME_CONFIG,
+  START_POSITIONS,
+  TRACK_WAYPOINTS,
+} from "../constants/gameConfig";
+import * as THREE from "three";
+
+export type RaceState = "waiting" | "countdown" | "racing" | "finished";
 
 export interface Enemy {
   id: string;
@@ -7,98 +14,107 @@ export interface Enemy {
 }
 
 export function useGameState() {
-  const [hp, setHp] = useState<number>(GAME_CONFIG.playerMaxHP);
-  const [isGameOver, setIsGameOver] = useState(false);
+  const [currentLap, setCurrentLap] = useState(1); // Start at lap 1
+  const [raceState, setRaceState] = useState<RaceState>("waiting");
+  const [countdown, setCountdown] = useState(3);
   const [enemies, setEnemies] = useState<Enemy[]>([]);
-  const [enemiesEnabled, setEnemiesEnabled] = useState(true);
-  const lastDamageTime = useRef(0);
-  const enemyCounterRef = useRef(0);
-  const lastEnemySpawnTime = useRef(0);
   const initializedRef = useRef(false);
 
+  // Race State
+  const nextCheckpointIndexRef = useRef(0);
+  const lapsCompletedRef = useRef(0);
 
-
-  const takeDamage = useCallback((amount: number) => {
-    const now = Date.now();
-
-    // Check cooldown
-    if (now - lastDamageTime.current < GAME_CONFIG.damageCooldown) {
-      return;
-    }
-
-    lastDamageTime.current = now;
-
-    setHp((currentHp) => {
-      const newHp = Math.max(0, currentHp - amount);
-
-      if (newHp === 0) {
-        setIsGameOver(true);
-      }
-
-      return newHp;
-    });
-  }, []);
-
-  const spawnEnemy = useCallback(() => {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = GAME_CONFIG.enemySpawnDistance;
-    const spawnPos: [number, number, number] = [
-      Math.cos(angle) * distance,
-      2,
-      Math.sin(angle) * distance,
-    ];
-
-    const newEnemy: Enemy = {
-      id: `enemy-${enemyCounterRef.current++}`,
-      spawnPosition: spawnPos,
-    };
-
-    setEnemies((prev) => [...prev, newEnemy]);
-  }, []);
-
-  // Spawn enemy every 15 seconds
+  // Initialize Racers once
   useEffect(() => {
-    if (!enemiesEnabled) return;
+    if (initializedRef.current) return;
+    initializedRef.current = true;
 
-    const intervalId = setInterval(() => {
-      spawnEnemy();
-    }, GAME_CONFIG.enemySpawnInterval);
-
-    return () => clearInterval(intervalId);
-  }, [enemiesEnabled, spawnEnemy]);
-
-  const removeEnemy = useCallback((id: string) => {
-    setEnemies((prev) => prev.filter((e) => e.id !== id));
+    // Create enemies based on Grid positions (skipping index 0 which is player)
+    const racers: Enemy[] = [];
+    for (let i = 1; i < START_POSITIONS.length; i++) {
+      racers.push({
+        id: `racer-${i}`,
+        spawnPosition: START_POSITIONS[i],
+      });
+    }
+    setEnemies(racers);
   }, []);
 
-  const updateEnemySpawning = useCallback(() => {
-    // Disabled - using static 5 enemies for testing
+  const startRace = useCallback(() => {
+    if (raceState !== "waiting") return;
+    setRaceState("countdown");
+    setCountdown(3);
+
+    let count = 3;
+    const interval = setInterval(() => {
+      count--;
+      if (count > 0) {
+        setCountdown(count);
+      } else if (count === 0) {
+        setCountdown(0); // GO!
+        setRaceState("racing");
+      } else {
+        clearInterval(interval);
+      }
+    }, 1000);
+  }, [raceState]);
+
+  const finishRace = useCallback(() => {
+    setRaceState("finished");
   }, []);
 
-  const toggleEnemies = useCallback(() => {
-    setEnemiesEnabled((prev) => !prev);
-  }, []);
+  const checkCheckpoint = useCallback(
+    (position: THREE.Vector3) => {
+      if (raceState !== "racing") return;
 
-  const restartGame = useCallback(() => {
-    setHp(GAME_CONFIG.playerMaxHP);
-    setIsGameOver(false);
-    setEnemies([]);
-    setEnemiesEnabled(true);
-    lastDamageTime.current = 0;
-    lastEnemySpawnTime.current = 0;
-    enemyCounterRef.current = 0;
+      const waypoints = TRACK_WAYPOINTS;
+      const targetIndex = nextCheckpointIndexRef.current;
+      const targetPosVal = waypoints[targetIndex];
+      const targetPos = new THREE.Vector3(
+        targetPosVal[0],
+        targetPosVal[1],
+        targetPosVal[2],
+      );
+
+      // Check distance to target checkpoint
+      // Using a larger radius for checkpoints to ensure player catches them
+      if (position.distanceTo(targetPos) < GAME_CONFIG.checkpointRadius) {
+        nextCheckpointIndexRef.current = (targetIndex + 1) % waypoints.length;
+
+        // Check for Lap Completion
+        // If we pass the last waypoint (index went from Length-1 to 0)
+        if (targetIndex === waypoints.length - 1) {
+          setCurrentLap((l) => {
+            const next = l + 1;
+            if (next > GAME_CONFIG.totalLaps) {
+              finishRace();
+              return l; // Keep at max/finished
+            }
+            return next;
+          });
+        }
+      }
+    },
+    [raceState, finishRace],
+  );
+
+  const restartRace = useCallback(() => {
+    setCurrentLap(1);
+    setRaceState("waiting");
+    nextCheckpointIndexRef.current = 0;
+    lapsCompletedRef.current = 0;
+    // Note: Caller needs to call startRace again
   }, []);
 
   return {
-    hp,
-    isGameOver,
+    currentLap,
+    totalLaps: GAME_CONFIG.totalLaps,
+    raceState,
+    countdown,
     enemies,
-    enemiesEnabled,
-    takeDamage,
-    spawnEnemy,
-    removeEnemy,
-    updateEnemySpawning,
-    toggleEnemies,
-    restartGame,
+    startRace,
+    finishRace,
+    restartRace,
+    checkCheckpoint,
   };
 }

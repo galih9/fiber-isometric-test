@@ -111,14 +111,20 @@ export function Car({
     const absSpeed = Math.abs(forwardSpeed);
 
     if (absSpeed > 1.0 || leftInput || rightInput) {
+      // Inverse steering when reversing
+      // Trigger if pressing backward OR already moving backward
+      const isReversing =
+        forwardSpeed < -0.1 || (backwardInput && forwardSpeed < 0.5);
+      const steerMultiplier = isReversing ? -1 : 1;
+
       const turnSpeed = GAME_CONFIG.turnSpeed * delta;
       const torque = new THREE.Vector3(0, 0, 0);
 
       if (leftInput) {
-        torque.y += turnSpeed;
+        torque.y -= turnSpeed * steerMultiplier;
       }
       if (rightInput) {
-        torque.y -= turnSpeed;
+        torque.y += turnSpeed * steerMultiplier;
       }
 
       rigidBody.applyTorqueImpulse(
@@ -173,6 +179,7 @@ export function Car({
     <RigidBody
       ref={rigidBodyRef}
       position={GAME_CONFIG.carInitialPosition}
+      rotation={[0, -Math.PI / 2, 0]} // Face the track (-90 deg Y)
       colliders="cuboid"
       mass={GAME_CONFIG.carMass}
       linearDamping={GAME_CONFIG.linearDamping}
