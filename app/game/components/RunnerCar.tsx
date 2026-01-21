@@ -6,7 +6,12 @@ import { useKeyboardControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { DustSystem, type DustSystemHandle } from "../DustSystem";
 
-export const RunnerCar = () => {
+interface RunnerCarProps {
+  touchInput?: { left: boolean; right: boolean };
+  onCollision?: () => void;
+}
+
+export const RunnerCar = ({ touchInput, onCollision }: RunnerCarProps) => {
   const rbRef = useRef<RapierRigidBody>(null);
   const dustRef = useRef<DustSystemHandle>(null);
   const [, getKeys] = useKeyboardControls();
@@ -19,7 +24,10 @@ export const RunnerCar = () => {
   useFrame((state, delta) => {
     if (!rbRef.current) return;
 
-    const { left, right } = getKeys();
+    const keys = getKeys();
+    const isLeft = keys.left || touchInput?.left;
+    const isRight = keys.right || touchInput?.right;
+
     const currentPos = rbRef.current.translation();
     const linvel = rbRef.current.linvel();
 
@@ -32,9 +40,9 @@ export const RunnerCar = () => {
     }
 
     // Smoother steering using direct velocity setting or controlled impulses
-    const targetSideSpeed = (right ? 20 : 0) + (left ? -20 : 0);
+    const targetSideSpeed = (isRight ? 18 : 0) + (isLeft ? -18 : 0);
     const speedDiff = targetSideSpeed - linvel.x;
-    const accel = 50 * rbRef.current.mass();
+    const accel = 60 * rbRef.current.mass();
 
     if (Math.abs(speedDiff) > 0.1) {
        rbRef.current.applyImpulse({
@@ -45,16 +53,19 @@ export const RunnerCar = () => {
     }
 
     // Hand-brake / friction when no input
-    if (!left && !right) {
-      rbRef.current.applyImpulse({ x: -linvel.x * 5 * rbRef.current.mass() * delta, y: 0, z: 0 }, true);
+    if (!isLeft && !isRight) {
+      rbRef.current.applyImpulse({ x: -linvel.x * 6 * rbRef.current.mass() * delta, y: 0, z: 0 }, true);
     }
 
-    // Camera follow (FIXED X position)
-    // We target a position behind the car but centered
+    // Camera follow (Responsive adjustments)
+    const isPortrait = state.size.height > state.size.width;
+    const zDist = isPortrait ? 22 : 15;
+    const yDist = isPortrait ? 8 : 5;
+
     const cameraPosition = new THREE.Vector3(
       0,
-      currentPos.y + 5,
-      currentPos.z + 15
+      currentPos.y + yDist,
+      currentPos.z + zDist
     );
     state.camera.position.lerp(cameraPosition, 0.1);
     state.camera.lookAt(0, currentPos.y + 1, currentPos.z - 5);
@@ -64,7 +75,6 @@ export const RunnerCar = () => {
     if (now - lastEmitTime.current > 0.02) {
       lastEmitTime.current = now;
       if (dustRef.current) {
-        // Emit from wheels
         const offset = (Math.random() - 0.5) * 1.5;
         const carPos = new THREE.Vector3(currentPos.x + offset, currentPos.y - 0.5, currentPos.z + 1.5);
         dustRef.current.emit(carPos, new THREE.Vector3(0, 1, 10));
@@ -80,11 +90,16 @@ export const RunnerCar = () => {
         colliders="cuboid"
         position={[0, 1, 0]}
         mass={1}
-        enabledTranslations={[true, true, false]} // LOCK Z
-        enabledRotations={[false, true, false]}     // LOCK X/Z Rotations
+        enabledTranslations={[true, true, false]}
+        enabledRotations={[false, true, false]}
         friction={0.5}
         linearDamping={0.5}
         angularDamping={0.5}
+        onCollisionEnter={(e) => {
+           if (e.other.rigidBodyObject?.userData?.type === 'obstacle') {
+             onCollision?.();
+           }
+        }}
       >
         <primitive object={clonedScene} scale={1} rotation={[0, Math.PI, 0]} />
       </RigidBody>

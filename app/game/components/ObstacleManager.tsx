@@ -40,16 +40,15 @@ const ObstacleItem = ({ obstacle, onDespawn }: { obstacle: Obstacle; onDespawn: 
       userData={{ type: 'obstacle' }}
     >
       <mesh castShadow>
-        <boxGeometry args={[6, 2.5, 1]} />
+        <boxGeometry args={[4, 2, 1]} /> {/* Slightly smaller obstacles for narrower road */}
         <meshStandardMaterial color="#ef4444" />
       </mesh>
-      {/* Visual stripes */}
       <mesh position={[0, 0, 0.51]}>
-        <boxGeometry args={[6, 0.5, 0.1]} />
+        <boxGeometry args={[4, 0.4, 0.1]} />
         <meshStandardMaterial color="white" />
       </mesh>
-      <mesh position={[0, 0.8, 0.51]}>
-        <boxGeometry args={[6, 0.2, 0.1]} />
+      <mesh position={[0, 0.6, 0.51]}>
+        <boxGeometry args={[4, 0.15, 0.1]} />
         <meshStandardMaterial color="white" />
       </mesh>
     </RigidBody>
@@ -60,17 +59,17 @@ export const ObstacleManager = () => {
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
 
   const spawnObstacle = () => {
-    // Spawn between -25 and 25 (Road width is 60)
-    const x = (Math.random() - 0.5) * 50;
+    // Road width 30. Spawn range -12 to 12
+    const x = (Math.random() - 0.5) * 24;
     const newObstacle: Obstacle = {
       id: Math.random().toString(),
-      position: [x, 1.25, SPAWN_Z], // Y is half of height 2.5
+      position: [x, 1, SPAWN_Z],
     };
     setObstacles((prev) => [...prev, newObstacle]);
   };
 
   useEffect(() => {
-    const interval = setInterval(spawnObstacle, 800);
+    const interval = setInterval(spawnObstacle, 1000);
     return () => clearInterval(interval);
   }, []);
 
