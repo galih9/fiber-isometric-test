@@ -1,6 +1,6 @@
 import { Suspense, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Sky, Stars, KeyboardControls } from "@react-three/drei";
+import { Sky, KeyboardControls } from "@react-three/drei";
 import { Physics } from "@react-three/rapier";
 import { RunnerCar } from "./components/RunnerCar";
 import { Log } from "./components/Log";
@@ -16,27 +16,19 @@ export const RunnerApp = () => {
         { name: "backward", keys: ["ArrowDown", "KeyS"] },
         { name: "left", keys: ["ArrowLeft", "KeyA"] },
         { name: "right", keys: ["ArrowRight", "KeyD"] },
-        { name: "jump", keys: ["Space"] },
       ]}
     >
-      <div style={{ width: "100vw", height: "100vh", background: "#000" }}>
+      <div style={{ width: "100vw", height: "100vh", background: "#87ceeb" }}>
         <Canvas shadows camera={{ position: [0, 10, 20], fov: 45 }}>
-          <color attach="background" args={["#050505"]} />
-          <Sky sunPosition={[100, 10, 100]} />
-          <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+          <Sky sunPosition={[100, 20, 100]} />
 
-          <ambientLight intensity={0.5} />
+          <ambientLight intensity={0.7} />
           <directionalLight
             position={[10, 20, 10]}
             intensity={1.5}
             castShadow
             shadow-mapSize={[1024, 1024]}
-            shadow-camera-left={-50}
-            shadow-camera-right={50}
-            shadow-camera-top={50}
-            shadow-camera-bottom={-50}
           />
-          <pointLight position={[-10, 10, -10]} intensity={1} color="#3b82f6" />
 
           <Suspense fallback={null}>
             <Physics gravity={[0, -30, 0]}>
@@ -64,40 +56,32 @@ export const RunnerApp = () => {
               alignItems: "center",
               justifyContent: "center",
               color: "white",
-              fontFamily: "monospace",
-              background: "rgba(0,0,0,0.8)",
+              fontFamily: "sans-serif",
+              background: "rgba(0,0,0,0.4)",
               zIndex: 10,
             }}
           >
-            <h1 style={{ fontSize: "5rem", margin: 0, color: "#f87171", textShadow: "0 0 20px rgba(248, 113, 113, 0.5)" }}>
-              LOG RUNNER
+            <h1 style={{ fontSize: "4rem", margin: 0, textShadow: "2px 2px 4px rgba(0,0,0,0.5)" }}>
+              CHEESE RUNNER
             </h1>
-            <p style={{ fontSize: "1.5rem", margin: "1rem 0 3rem 0", letterSpacing: "0.2em" }}>
-              STAY ON THE LOG • AVOID OBSTACLES
+            <p style={{ fontSize: "1.5rem", margin: "1rem 0 2rem 0" }}>
+              Stay on the log!
             </p>
             <button
               onClick={() => setGameStarted(true)}
               style={{
-                padding: "1.5rem 4rem",
-                fontSize: "2rem",
+                padding: "1rem 3rem",
+                fontSize: "1.5rem",
                 cursor: "pointer",
-                background: "#f87171",
+                background: "#3d2b1f",
                 border: "none",
-                borderRadius: "8px",
+                borderRadius: "4px",
                 color: "white",
-                fontWeight: "bold",
-                transition: "transform 0.2s",
-                boxShadow: "0 10px 30px rgba(248, 113, 113, 0.4)"
+                fontWeight: "bold"
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
             >
               START
             </button>
-            <div style={{ marginTop: "4rem", textAlign: "center", opacity: 0.8 }}>
-              <p>STEER: WASD / ARROWS</p>
-              <p>RAMPS TRIGGER JUMPS AUTOMATICALLY</p>
-            </div>
           </div>
         )}
       </div>

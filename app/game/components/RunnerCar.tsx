@@ -1,13 +1,24 @@
-import { useRef } from "react";
+import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RigidBody } from "@react-three/rapier";
-import type { RapierRigidBody, CollisionPayload } from "@react-three/rapier";
-import { useKeyboardControls } from "@react-three/drei";
+import type { RapierRigidBody } from "@react-three/rapier";
+import { useKeyboardControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { DustSystem, type DustSystemHandle } from "../DustSystem";
 
 export const RunnerCar = () => {
   const rbRef = useRef<RapierRigidBody>(null);
+  const dustRef = useRef<DustSystemHandle>(null);
   const [, getKeys] = useKeyboardControls();
+
+  // Load the car model
+  const { scene } = useGLTF("/assets/cars/race.glb");
+  const clonedScene = useMemo(() => scene.clone(), [scene]);
+
+  // Adjust model orientation/scale if needed
+  // Usually these models are centered.
+
+  const lastEmitTime = useRef(0);
 
   useFrame((state, delta) => {
     if (!rbRef.current) return;
@@ -24,7 +35,7 @@ export const RunnerCar = () => {
     }
 
     // Steering
-    const steeringForce = 100 * rbRef.current.mass();
+    const steeringForce = 120 * rbRef.current.mass();
     if (left) {
       rbRef.current.applyImpulse({ x: -steeringForce * delta, y: 0, z: 0 }, true);
     }
@@ -32,63 +43,56 @@ export const RunnerCar = () => {
       rbRef.current.applyImpulse({ x: steeringForce * delta, y: 0, z: 0 }, true);
     }
 
-    // Keep car at z=0
+    // Keep car at z=0 (compensate for any physics drift)
     const zCorrection = -currentPos.z * 50 * rbRef.current.mass();
     rbRef.current.applyImpulse({ x: 0, y: 0, z: zCorrection * delta }, true);
 
-    // Limit X position (road is approx 50 wide)
-    if (Math.abs(currentPos.x) > 25) {
-      rbRef.current.applyImpulse({ x: -currentPos.x * 2 * rbRef.current.mass(), y: 0, z: 0 }, true);
+    // Limit X position (road is short)
+    // The cylinder LENGTH is 60. So X range is -30 to 30.
+    if (Math.abs(currentPos.x) > 28) {
+       // Apply a strong force back or just let it fall?
+       // User said "stay on the log". If they go too far they should fall.
+       // But I'll add a little resistance at the edges.
+       const edgeForce = (currentPos.x > 0 ? -1 : 1) * 10 * rbRef.current.mass();
+       rbRef.current.applyImpulse({ x: edgeForce * delta, y: 0, z: 0 }, true);
     }
 
-    // Camera follow
+    // Camera follow (FIXED X position as requested)
     const cameraPosition = new THREE.Vector3(
-      currentPos.x * 0.7,
+      0, // Fixed X
       currentPos.y + 6,
-      currentPos.z + 14
+      currentPos.z + 18 // Slightly further back
     );
     state.camera.position.lerp(cameraPosition, 0.1);
-    state.camera.lookAt(currentPos.x, currentPos.y + 1, currentPos.z);
+
+    // Look at a point at the center of the road, but at car's height
+    state.camera.lookAt(0, currentPos.y + 1, currentPos.z);
+
+    // Dust effects
+    const now = state.clock.getElapsedTime();
+    if (now - lastEmitTime.current > 0.05) {
+      lastEmitTime.current = now;
+      if (dustRef.current) {
+        // Emit from back wheels approx
+        const carPos = new THREE.Vector3(currentPos.x, currentPos.y - 0.5, currentPos.z);
+        dustRef.current.emit(carPos, new THREE.Vector3(0, 1, 2));
+      }
+    }
   });
 
-  const handleCollision = (event: CollisionPayload) => {
-    if (event.other.rigidBodyObject?.userData?.type === 'ramp') {
-      rbRef.current?.applyImpulse({ x: 0, y: 15, z: 0 }, true);
-    }
-  };
-
   return (
-    <RigidBody
-      ref={rbRef}
-      colliders="cuboid"
-      position={[0, 2, 0]}
-      mass={5}
-      enabledRotations={[false, true, false]}
-      onCollisionEnter={handleCollision}
-      friction={2}
-    >
-      {/* Simple Car Model */}
-      <mesh castShadow>
-        <boxGeometry args={[1.5, 0.5, 3]} />
-        <meshStandardMaterial color="#f87171" /> {/* Reddish car */}
-      </mesh>
-
-      {/* Cabin */}
-      <mesh position={[0, 0.5, 0]} castShadow>
-        <boxGeometry args={[1, 0.5, 1.5]} />
-        <meshStandardMaterial color="#3b82f6" transparent opacity={0.7} />
-      </mesh>
-
-      {/* Wheels */}
-      {[
-        [-0.8, -0.2, 1], [0.8, -0.2, 1],
-        [-0.8, -0.2, -1], [0.8, -0.2, -1]
-      ].map((pos, i) => (
-        <mesh key={i} position={pos as [number, number, number]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.4, 0.4, 0.4, 16]} />
-          <meshStandardMaterial color="black" />
-        </mesh>
-      ))}
-    </RigidBody>
+    <>
+      <DustSystem ref={dustRef} />
+      <RigidBody
+        ref={rbRef}
+        colliders="cuboid"
+        position={[0, 2, 0]}
+        mass={5}
+        enabledRotations={[false, true, false]}
+        friction={2}
+      >
+        <primitive object={clonedScene} scale={1} rotation={[0, Math.PI, 0]} />
+      </RigidBody>
+    </>
   );
 };

@@ -5,13 +5,12 @@ import type { RapierRigidBody } from '@react-three/rapier';
 
 interface Obstacle {
   id: string;
-  type: 'box' | 'ramp';
   position: [number, number, number];
 }
 
-const SPAWN_Z = -150;
+const SPAWN_Z = -200;
 const DESPAWN_Z = 50;
-const SPEED = 40;
+const SPEED = 50;
 
 const ObstacleItem = ({ obstacle, onDespawn }: { obstacle: Obstacle; onDespawn: (id: string) => void }) => {
   const rbRef = useRef<RapierRigidBody>(null);
@@ -38,20 +37,21 @@ const ObstacleItem = ({ obstacle, onDespawn }: { obstacle: Obstacle; onDespawn: 
       type="kinematicPosition"
       position={obstacle.position}
       colliders="cuboid"
-      userData={{ type: obstacle.type }}
-      rotation={obstacle.type === 'ramp' ? [-Math.PI / 12, 0, 0] : [0, 0, 0]}
+      userData={{ type: 'obstacle' }}
     >
-      {obstacle.type === 'box' ? (
-        <mesh castShadow>
-          <boxGeometry args={[2, 2, 2]} />
-          <meshStandardMaterial color="#d97706" /> {/* Amber/Orange */}
-        </mesh>
-      ) : (
-        <mesh castShadow>
-          <boxGeometry args={[6, 1, 8]} />
-          <meshStandardMaterial color="#16a34a" /> {/* Green */}
-        </mesh>
-      )}
+      <mesh castShadow>
+        <boxGeometry args={[4, 2, 1]} />
+        <meshStandardMaterial color="#ef4444" /> {/* Red roadblock */}
+      </mesh>
+      {/* Visual stripes or something simple */}
+      <mesh position={[0, 0, 0.51]}>
+        <boxGeometry args={[4, 0.5, 0.1]} />
+        <meshStandardMaterial color="white" />
+      </mesh>
+      <mesh position={[0, 0.7, 0.51]}>
+        <boxGeometry args={[4, 0.2, 0.1]} />
+        <meshStandardMaterial color="white" />
+      </mesh>
     </RigidBody>
   );
 };
@@ -60,18 +60,16 @@ export const ObstacleManager = () => {
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
 
   const spawnObstacle = () => {
-    const type = Math.random() > 0.4 ? 'box' : 'ramp';
-    const x = (Math.random() - 0.5) * 40; // Wider spawn area
+    const x = (Math.random() - 0.5) * 40; // Within log width
     const newObstacle: Obstacle = {
       id: Math.random().toString(),
-      type,
-      position: [x, type === 'ramp' ? 0.2 : 1, SPAWN_Z],
+      position: [x, 1, SPAWN_Z],
     };
     setObstacles((prev) => [...prev, newObstacle]);
   };
 
   useEffect(() => {
-    const interval = setInterval(spawnObstacle, 1000);
+    const interval = setInterval(spawnObstacle, 1200);
     return () => clearInterval(interval);
   }, []);
 
