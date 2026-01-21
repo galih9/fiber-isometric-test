@@ -7,15 +7,10 @@ interface WallProps {
 
 export function Wall({ position, args }: WallProps) {
   return (
-    <RigidBody
-      type="fixed"
-      position={position}
-      colliders="cuboid"
-      collisionGroups={0x00010002} // Static group
-    >
-      <mesh castShadow receiveShadow>
+    <RigidBody type="fixed" position={position} colliders="cuboid">
+      <mesh>
         <boxGeometry args={args} />
-        <meshStandardMaterial color="#777" />
+        <meshStandardMaterial color="#888888" />
       </mesh>
     </RigidBody>
   );

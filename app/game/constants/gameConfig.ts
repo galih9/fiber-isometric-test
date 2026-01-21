@@ -1,28 +1,31 @@
 // Game configuration constants
 export const GAME_CONFIG = {
   // Map settings
-  mapSize: 60,
+  mapSize: 100,
   wallHeight: 4,
   wallThickness: 2,
+  trackWidth: 15,
+  trackLength: 80,
+  trackRadius: 20,
 
   // Car settings
   carMass: 150,
   carScale: 0.5,
-  carInitialPosition: [0, 0.2, 0] as [number, number, number],
+  carInitialPosition: [-3, 0.2, -20] as [number, number, number],
   linearDamping: 0.8,
   angularDamping: 1.5,
   carFriction: 0.5,
 
   // Physics settings
   gravity: [0, -20, 0] as [number, number, number],
-  maxSpeed: 20.0,
-  driveSpeed: 2.0,
+  maxSpeed: 16.0,
+  driveSpeed: 2.5, // Reduced for better control
   turnSpeed: 3.5,
   lateralFriction: 0.8,
 
   // Camera settings
   cameraOffset: { x: 20, y: 20, z: 20 },
-  cameraZoom: 60,
+  cameraZoom: 50,
   cameraNear: -100,
   cameraFar: 300,
   cameraSmoothing: 0.1,
@@ -41,35 +44,39 @@ export const GAME_CONFIG = {
   obstacleRestitution: 0.2,
 
   // Loader settings
-  loaderMinDuration: 5000, // 5 seconds
+  loaderMinDuration: 2000,
 
-  // Gameplay settings
-  playerMaxHP: 100,
-  collisionDamage: 20,
-  damageCooldown: 1000, // 1 second between damage
+  // Racing settings
+  totalLaps: 3,
+  checkpointRadius: 10,
 
-  // Enemy settings
-  enemyMaxHP: 100,
-  enemyMass: 200,
+  // Enemy settings (Racers)
+  enemyMass: 150, // Same as player
   enemyScale: 0.5,
-  enemyMaxSpeed: 15.0,
-  enemyAcceleration: 0.8,
-  enemyTurnSpeed: 2.5,
-  enemySpawnDistance: 25, // Distance from center
-  enemySpawnInterval: 15000, // 15 seconds in milliseconds
-  enemyDespawnDistance: 35, // Distance from center to despawn enemy
-  collisionGroupStatic: 0x00010002, // Member 1, Filter 2 (Dynamic)
-  collisionGroupDynamic: 0x00020003, // Member 2, Filter 1 (Static) | 2 (Dynamic)
+  enemyMaxSpeed: 18.0, // Increased from 15.0
+  enemyAcceleration: 1.5, // Increased from 1.0
+  enemyTurnSpeed: 6.0, // Doubled from 3.0
+  collisionGroupStatic: 0x00010002,
+  collisionGroupDynamic: 0x00020003,
 } as const;
 
-// Obstacle positions
-export const OBSTACLE_POSITIONS: [number, number, number][] = [
-  [5, 2, 5],
-  [-5, 2, -5],
-  [10, 2, -10],
-  [-10, 2, 8],
-  [15, 2, 2],
-  [-12, 2, 12],
-  [0, 2, 12],
-  [8, 2, -15],
+// Racing Waypoints (Simple Oval)
+// 4 corners + midpoints
+export const TRACK_WAYPOINTS: [number, number, number][] = [
+  [0, 0, -20], // Start/Finish Line
+  [30, 0, -20], // Turn 1 entry
+  [40, 0, 0], // Turn 1 apex
+  [30, 0, 20], // Turn 1 exit
+  [-30, 0, 20], // Turn 2 entry
+  [-40, 0, 0], // Turn 2 apex
+  [-30, 0, -20], // Turn 2 exit
+];
+
+// Start Positions (Grid)
+export const START_POSITIONS: [number, number, number][] = [
+  [-6, 0.2, -25],
+  [-9, 0.2, -20],
+  [-12, 0.2, -15],
+  [-12, 0.2, -25],
+  [-14, 0.2, -20],
 ];
