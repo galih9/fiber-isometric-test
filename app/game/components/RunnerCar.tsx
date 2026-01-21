@@ -11,12 +11,8 @@ export const RunnerCar = () => {
   const dustRef = useRef<DustSystemHandle>(null);
   const [, getKeys] = useKeyboardControls();
 
-  // Load the car model
   const { scene } = useGLTF("/assets/cars/race.glb");
   const clonedScene = useMemo(() => scene.clone(), [scene]);
-
-  // Adjust model orientation/scale if needed
-  // Usually these models are centered.
 
   const lastEmitTime = useRef(0);
 
@@ -25,57 +21,53 @@ export const RunnerCar = () => {
 
     const { left, right } = getKeys();
     const currentPos = rbRef.current.translation();
+    const linvel = rbRef.current.linvel();
 
     // Respawn if fell off
-    if (currentPos.y < -10) {
-      rbRef.current.setTranslation({ x: 0, y: 5, z: 0 }, true);
+    if (currentPos.y < -5) {
+      rbRef.current.setTranslation({ x: 0, y: 2, z: 0 }, true);
       rbRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
       rbRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
       return;
     }
 
-    // Steering
-    const steeringForce = 120 * rbRef.current.mass();
-    if (left) {
-      rbRef.current.applyImpulse({ x: -steeringForce * delta, y: 0, z: 0 }, true);
-    }
-    if (right) {
-      rbRef.current.applyImpulse({ x: steeringForce * delta, y: 0, z: 0 }, true);
-    }
+    // Smoother steering using direct velocity setting or controlled impulses
+    const targetSideSpeed = (right ? 20 : 0) + (left ? -20 : 0);
+    const speedDiff = targetSideSpeed - linvel.x;
+    const accel = 50 * rbRef.current.mass();
 
-    // Keep car at z=0 (compensate for any physics drift)
-    const zCorrection = -currentPos.z * 50 * rbRef.current.mass();
-    rbRef.current.applyImpulse({ x: 0, y: 0, z: zCorrection * delta }, true);
-
-    // Limit X position (road is short)
-    // The cylinder LENGTH is 60. So X range is -30 to 30.
-    if (Math.abs(currentPos.x) > 28) {
-       // Apply a strong force back or just let it fall?
-       // User said "stay on the log". If they go too far they should fall.
-       // But I'll add a little resistance at the edges.
-       const edgeForce = (currentPos.x > 0 ? -1 : 1) * 10 * rbRef.current.mass();
-       rbRef.current.applyImpulse({ x: edgeForce * delta, y: 0, z: 0 }, true);
+    if (Math.abs(speedDiff) > 0.1) {
+       rbRef.current.applyImpulse({
+         x: speedDiff * accel * delta,
+         y: 0,
+         z: 0
+       }, true);
     }
 
-    // Camera follow (FIXED X position as requested)
+    // Hand-brake / friction when no input
+    if (!left && !right) {
+      rbRef.current.applyImpulse({ x: -linvel.x * 5 * rbRef.current.mass() * delta, y: 0, z: 0 }, true);
+    }
+
+    // Camera follow (FIXED X position)
+    // We target a position behind the car but centered
     const cameraPosition = new THREE.Vector3(
-      0, // Fixed X
-      currentPos.y + 6,
-      currentPos.z + 18 // Slightly further back
+      0,
+      currentPos.y + 5,
+      currentPos.z + 15
     );
     state.camera.position.lerp(cameraPosition, 0.1);
-
-    // Look at a point at the center of the road, but at car's height
-    state.camera.lookAt(0, currentPos.y + 1, currentPos.z);
+    state.camera.lookAt(0, currentPos.y + 1, currentPos.z - 5);
 
     // Dust effects
     const now = state.clock.getElapsedTime();
-    if (now - lastEmitTime.current > 0.05) {
+    if (now - lastEmitTime.current > 0.02) {
       lastEmitTime.current = now;
       if (dustRef.current) {
-        // Emit from back wheels approx
-        const carPos = new THREE.Vector3(currentPos.x, currentPos.y - 0.5, currentPos.z);
-        dustRef.current.emit(carPos, new THREE.Vector3(0, 1, 2));
+        // Emit from wheels
+        const offset = (Math.random() - 0.5) * 1.5;
+        const carPos = new THREE.Vector3(currentPos.x + offset, currentPos.y - 0.5, currentPos.z + 1.5);
+        dustRef.current.emit(carPos, new THREE.Vector3(0, 1, 10));
       }
     }
   });
@@ -86,10 +78,13 @@ export const RunnerCar = () => {
       <RigidBody
         ref={rbRef}
         colliders="cuboid"
-        position={[0, 2, 0]}
-        mass={5}
-        enabledRotations={[false, true, false]}
-        friction={2}
+        position={[0, 1, 0]}
+        mass={1}
+        enabledTranslations={[true, true, false]} // LOCK Z
+        enabledRotations={[false, true, false]}     // LOCK X/Z Rotations
+        friction={0.5}
+        linearDamping={0.5}
+        angularDamping={0.5}
       >
         <primitive object={clonedScene} scale={1} rotation={[0, Math.PI, 0]} />
       </RigidBody>

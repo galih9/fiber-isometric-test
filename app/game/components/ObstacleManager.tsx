@@ -8,9 +8,9 @@ interface Obstacle {
   position: [number, number, number];
 }
 
-const SPAWN_Z = -200;
+const SPAWN_Z = -250;
 const DESPAWN_Z = 50;
-const SPEED = 50;
+const SPEED = 60;
 
 const ObstacleItem = ({ obstacle, onDespawn }: { obstacle: Obstacle; onDespawn: (id: string) => void }) => {
   const rbRef = useRef<RapierRigidBody>(null);
@@ -40,16 +40,16 @@ const ObstacleItem = ({ obstacle, onDespawn }: { obstacle: Obstacle; onDespawn: 
       userData={{ type: 'obstacle' }}
     >
       <mesh castShadow>
-        <boxGeometry args={[4, 2, 1]} />
-        <meshStandardMaterial color="#ef4444" /> {/* Red roadblock */}
+        <boxGeometry args={[6, 2.5, 1]} />
+        <meshStandardMaterial color="#ef4444" />
       </mesh>
-      {/* Visual stripes or something simple */}
+      {/* Visual stripes */}
       <mesh position={[0, 0, 0.51]}>
-        <boxGeometry args={[4, 0.5, 0.1]} />
+        <boxGeometry args={[6, 0.5, 0.1]} />
         <meshStandardMaterial color="white" />
       </mesh>
-      <mesh position={[0, 0.7, 0.51]}>
-        <boxGeometry args={[4, 0.2, 0.1]} />
+      <mesh position={[0, 0.8, 0.51]}>
+        <boxGeometry args={[6, 0.2, 0.1]} />
         <meshStandardMaterial color="white" />
       </mesh>
     </RigidBody>
@@ -60,16 +60,17 @@ export const ObstacleManager = () => {
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
 
   const spawnObstacle = () => {
-    const x = (Math.random() - 0.5) * 40; // Within log width
+    // Spawn between -25 and 25 (Road width is 60)
+    const x = (Math.random() - 0.5) * 50;
     const newObstacle: Obstacle = {
       id: Math.random().toString(),
-      position: [x, 1, SPAWN_Z],
+      position: [x, 1.25, SPAWN_Z], // Y is half of height 2.5
     };
     setObstacles((prev) => [...prev, newObstacle]);
   };
 
   useEffect(() => {
-    const interval = setInterval(spawnObstacle, 1200);
+    const interval = setInterval(spawnObstacle, 800);
     return () => clearInterval(interval);
   }, []);
 

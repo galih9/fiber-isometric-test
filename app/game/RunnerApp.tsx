@@ -3,7 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import { Sky, KeyboardControls } from "@react-three/drei";
 import { Physics } from "@react-three/rapier";
 import { RunnerCar } from "./components/RunnerCar";
-import { Log } from "./components/Log";
+import { Road } from "./components/Road";
 import { ObstacleManager } from "./components/ObstacleManager";
 
 export const RunnerApp = () => {
@@ -35,7 +35,7 @@ export const RunnerApp = () => {
               {gameStarted && (
                 <>
                   <RunnerCar />
-                  <Log />
+                  <Road />
                   <ObstacleManager />
                 </>
               )}
@@ -65,7 +65,7 @@ export const RunnerApp = () => {
               CHEESE RUNNER
             </h1>
             <p style={{ fontSize: "1.5rem", margin: "1rem 0 2rem 0" }}>
-              Stay on the log!
+              Stay on the road!
             </p>
             <button
               onClick={() => setGameStarted(true)}
